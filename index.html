@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketup - Generador de Guías</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
+    rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* --- Variables Globales y Diseño Base --- */
+    :root {
+      --primary: #3f35fe;
+      --primary-hover: #2e23d1;
+      --secondary: #10B981;
+      --secondary-hover: #059669;
+      --danger: #EF4444;
+      --danger-hover: #DC2626;
+      --warning: #F59E0B;
+      --surface: #FFFFFF;
+      --background: #F3F4F6;
+      --text-main: #1F2937;
+      --text-muted: #6B7280;
+      --border: #E5E7EB;
+      --input-focus: rgba(79, 70, 229, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--background);
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+
+    /* --- Layout Principal (UI) --- */
+    .app-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      padding: 20px 32px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-left: 32px;
+    }
+
+    /* --- Panel de Controles (Izquierda) --- */
+    .control-panel {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      position: sticky;
+      top: 24px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .control-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .control-panel::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+
+    .section-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 16px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
+    input,
+    textarea,
+    select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      background: #FAFAFA;
+      width: 100%;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: var(--surface);
+      box-shadow: 0 0 0 3px var(--input-focus);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .input-error {
+      border-color: var(--danger) !important;
+      background: #FEF2F2 !important;
+    }
+
+    .error-msg {
+      font-size: 0.75rem;
+      color: var(--danger);
+      margin-top: 4px;
+      display: none;
+    }
+
+    /* --- Botones --- */
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .btn-group.grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--secondary);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: var(--secondary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: var(--surface);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .btn-danger:hover {
+      background: #FEF2F2;
+    }
+
+    .btn-outline {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover {
+      background: var(--background);
+    }
+
+    .btn-file {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-file input[type=file] {
+      position: absolute;
+      top: 0;
+      right: 0;
+      min-width: 100%;
+      min-height: 100%;
+      font-size: 100px;
+      text-align: right;
+      opacity: 0;
+      outline: none;
+      background: white;
+      cursor: inherit;
+      display: block;
+    }
+
+    /* --- Panel de Vista Previa (Derecha) --- */
+    .preview-panel {
+      background: var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      min-height: calc(100vh - 48px);
+    }
+
+    .preview-header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .badge {
+      background: var(--primary);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-left: 8px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      height: 100%;
+      text-align: center;
+      gap: 16px;
+      opacity: 0.8;
+      margin-top: 60px;
+    }
+
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      opacity: 0.5;
+    }
+
+    .preview-limit-notice {
+      background: #E0E7FF;
+      color: #3730A3;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: center;
+      margin-top: 16px;
+      width: 100%;
+      max-width: 450px;
+      display: none;
+    }
+
+    /* --- DISEÑO DE LA GUÍA --- */
+    .sheet {
+      background: white;
+      width: 100%;
+      max-width: 450px;
+      border: 2px solid black;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      color: black;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+      border-radius: 2px;
+    }
+
+    .label-brand {
+      text-align: center;
+      border-bottom: 2px solid black;
+      padding-bottom: 5px;
+      margin-bottom: 5px;
+    }
+
+    .brand {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 2px;
+    }
+
+    .label {
+      border: 2px solid black;
+    }
+
+    .row {
+      display: flex;
+      border-bottom: 2px solid black;
+    }
+
+    .cell {
+      flex: 1;
+      padding: 8px;
+      border-right: 2px solid black;
+    }
+
+    .cell:last-child {
+      border-right: none;
+    }
+
+    .head {
+      font-size: 10px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #000;
+      text-transform: uppercase;
+    }
+
+    .body-text {
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .bold {
+      font-weight: bold;
+    }
+
+    .small-text {
+      font-size: 12px;
+      white-space: pre-wrap;
+      margin-top: 4px;
+    }
+
+    .single {
+      padding: 8px;
+      border-bottom: 2px solid black;
+    }
+
+    .single:last-child {
+      border-bottom: none;
+    }
+
+    .flex-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .guide-qr-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .guide-number {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-top: 8px;
+    }
+
+    .qr-image {
+      width: 260px;
+      height: 260px;
+      border: 3px solid #000;
+      padding: 2px;
+      background: #fff;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    .date-box {
+      border: 1px solid black;
+      padding: 2px 6px;
+      display: inline-block;
+      font-weight: bold;
+    }
+
+    .note {
+      font-size: 11px;
+      font-style: italic;
+      white-space: pre-wrap;
+    }
+
+    .open-note {
+      text-align: center;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .footer {
+      text-align: right;
+      font-size: 10px;
+      margin-top: 5px;
+      color: #555;
+    }
+
+    details {
+      margin-bottom: 8px;
+    }
+
+    summary.section-title {
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+    }
+
+    summary.section-title::-webkit-details-marker {
+      display: none;
+    }
+
+    summary.section-title::before {
+      content: "▼";
+      font-size: 0.6rem;
+      margin-right: 8px;
+    }
+
+    details[open] summary.section-title::before {
+      content: "▲";
+    }
+
+    /* --- TOAST NOTIFICATIONS --- */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 9999;
+    }
+
+    .toast {
+      background: var(--surface);
+      color: var(--text-main);
+      padding: 16px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 250px;
+      transform: translateX(100%);
+      opacity: 0;
+      animation: slideIn 0.3s forwards ease-out;
+      border-left: 4px solid var(--primary);
+    }
+
+    .toast.success {
+      border-left-color: var(--secondary);
+    }
+
+    .toast.error {
+      border-left-color: var(--danger);
+    }
+
+    .toast.warning {
+      border-left-color: var(--warning);
+    }
+
+    .toast svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .toast.success svg {
+      color: var(--secondary);
+    }
+
+    .toast.error svg {
+      color: var(--danger);
+    }
+
+    .toast.warning svg {
+      color: var(--warning);
+    }
+
+    .toast-content {
+      flex: 1;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    @keyframes slideIn {
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+    }
+
+    /* --- REGLAS DE IMPRESIÓN --- */
+    .print-only {
+      display: none;
+    }
+
+    @media print {
+      body {
+        background: white;
+        margin: 0;
+        padding: 0;
+      }
+
+      @page {
+        size: 4in 6in;
+        margin: 0;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-only {
+        display: block;
+      }
+
+      .app-container {
+        display: block;
+        padding: 0;
+      }
+
+      .preview-panel {
+        background: transparent;
+        padding: 0;
+        display: block;
+      }
+
+      .sheet {
+        width: 100%;
+        max-width: none;
+        max-height: none;
+        border: none;
+        margin: 0;
+        padding: 1mm;
+        box-shadow: none;
+        page-break-after: always;
+        page-break-inside: avoid;
+        box-sizing: border-box;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <div class="app-container no-print">
+
+    <header>
+      <div>
+        <h1 style="color: var(--primary);"><i data-lucide="package" style="color: var(--primary)"></i> Generador de
+          Guías</h1>
+        <p>Marketup Logistics Manager</p>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <button onclick="ShippingGuideManager.printCourierList()" class="btn btn-secondary"
+          style="font-size: 1rem; padding: 12px 24px;">
+          <i data-lucide="clipboard-list"></i> Listado Mensajero
+        </button>
+        <button onclick="window.print()" class="btn btn-primary" style="font-size: 1rem; padding: 12px 24px;">
+          <i data-lucide="printer"></i> Imprimir Lote
+        </button>
+      </div>
+    </header>
+
+    <aside class="control-panel">
+
+      <details open>
+        <summary class="section-title">Carga Masiva (Excel)</summary>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="startSequence">Secuencia Inicial</label>
+            <input type="number" id="startSequence" value="10" placeholder="Ej: 10">
+          </div>
+        </div>
+        <div class="btn-group grid">
+          <div class="btn btn-outline btn-file">
+            <i data-lucide="file-spreadsheet"></i> Elegir Archivo
+            <input type="file" id="fileInput"
+              accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+              onchange="ShippingGuideManager.importSpreadsheet()">
+          </div>
+          <button onclick="ShippingGuideManager.downloadTemplate()" class="btn btn-outline">
+            <i data-lucide="download"></i> Plantilla
+          </button>
+        </div>
+      </details>
+
+      <details open>
+        <summary class="section-title" style="margin-top: 10px;">Creación Manual</summary>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="guideNumber">N° Guía</label>
+            <input type="text" id="guideNumber">
+          </div>
+          <div class="form-group">
+            <label for="dateText">Fecha</label>
+            <input type="date" id="dateText">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="company">Empresa de Envío</label>
+          <input type="text" id="company">
+        </div>
+      </details>
+
+      <details open>
+        <summary class="section-title" style="margin-top: 16px;">Remitente</summary>
+        <div class="form-group">
+          <label for="shipperName">Nombre Remitente</label>
+          <input type="text" id="shipperName">
+        </div>
+        <div class="form-group">
+          <label for="shipperAddress">Dirección Remitente</label>
+          <textarea id="shipperAddress" rows="2"></textarea>
+        </div>
+      </details>
+
+      <details open>
+        <summary class="section-title" style="margin-top: 16px;">Destinatario</summary>
+        <div class="form-group">
+          <label for="recipientName">Nombre Cliente</label>
+          <input type="text" id="recipientName" placeholder="Ej: Juan Pérez">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="recipientPhone">Teléfono</label>
+            <input type="text" id="recipientPhone" placeholder="809-000-0000">
+            <span class="error-msg" id="phoneError">Revisa que tenga 10 dígitos</span>
+          </div>
+          <div class="form-group">
+            <label for="recipientCity">Ciudad</label>
+            <input type="text" id="recipientCity">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="recipientAddress">Dirección Entrega</label>
+          <textarea id="recipientAddress" rows="2"></textarea>
+        </div>
+      </details>
+
+      <details open>
+        <summary class="section-title" style="margin-top: 16px;">Paquete y Valores</summary>
+        <div class="form-group">
+          <label for="contentText">Contenido</label>
+          <textarea id="contentText" rows="2" placeholder="Ej: 1x Smart Ring Negro"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="declaredValue">Valor Declarado</label>
+            <input type="text" id="declaredValue" placeholder="RD$ 0.00">
+          </div>
+          <div class="form-group">
+            <label for="amount">Monto a Recaudar</label>
+            <input type="text" id="amount" placeholder="RD$ 0.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="guideNote">Nota de Instrucción</label>
+          <textarea id="guideNote" rows="2"></textarea>
+        </div>
+      </details>
+
+      <div class="btn-group grid" style="margin-top: 20px;">
+        <button onclick="ShippingGuideManager.addManualGuideToBatch()" class="btn btn-secondary">
+          <i data-lucide="plus-circle"></i> Añadir al Lote
+        </button>
+        <button onclick="ShippingGuideManager.generateNextManualGuide()" class="btn btn-outline">
+          <i data-lucide="arrow-right"></i> Siguiente N°
+        </button>
+      </div>
+      <button onclick="ShippingGuideManager.resetDefaults()" class="btn btn-outline" style="width: 100%;">
+        <i data-lucide="rotate-ccw"></i> Restaurar Campos
+      </button>
+
+    </aside>
+
+    <main class="preview-panel">
+      <div class="preview-header">
+        <div>
+          <h2 style="font-size: 1.1rem; margin:0; display:flex; align-items:center;">
+            Vista Previa <span class="badge" id="guideCount">0</span>
+          </h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="ShippingGuideManager.exportFilledTemplate()" class="btn btn-outline">
+            <i data-lucide="download-cloud"></i> Exportar
+          </button>
+          <button onclick="ShippingGuideManager.clearBatch()" class="btn btn-danger">
+            <i data-lucide="trash-2"></i> Limpiar
+          </button>
+        </div>
+      </div>
+
+      <div id="emptyState" class="empty-state">
+        <i data-lucide="layers"></i>
+        <div>
+          <h3 style="margin-bottom: 4px; color: var(--text-main);">Aún no hay guías</h3>
+          <p>Agrega guías manualmente o sube un archivo Excel.</p>
+        </div>
+      </div>
+
+      <div id="previewStack"
+        style="display: flex; flex-direction: column; gap: 32px; width: 100%; align-items: center;"></div>
+
+      <div id="previewLimitNotice" class="preview-limit-notice">
+        Mostrando <span id="showingCount">0</span> guías en pantalla para mantener el rendimiento.<br>
+        <strong>¡Imprimir lote procesará todas! (<span id="totalCount">0</span>)</strong>
+      </div>
+    </main>
+
+  </div>
+
+  <div id="printArea" class="print-only"></div>
+
+  <script>
+    // Inicializar Iconos
+    lucide.createIcons();
+
+    const ShippingGuideManager = (() => {
+      // --- SISTEMA DE TOASTS ---
+      const showToast = (message, type = 'info') => {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        let iconHtml = '<i data-lucide="info"></i>';
+        if (type === 'success') iconHtml = '<i data-lucide="check-circle"></i>';
+        if (type === 'error') iconHtml = '<i data-lucide="alert-circle"></i>';
+        if (type === 'warning') iconHtml = '<i data-lucide="alert-triangle"></i>';
+
+        toast.innerHTML = `
+          ${iconHtml}
+          <div class="toast-content">${message}</div>
+        `;
+
+        container.appendChild(toast);
+        lucide.createIcons({ root: toast });
+
+        setTimeout(() => {
+          toast.style.animation = 'fadeOut 0.3s forwards ease-in';
+          setTimeout(() => toast.remove(), 300);
+        }, 3000);
+      };
+
+      // Configuración Inicial Defecto - ACTUALIZADA a RD$
+      const defaults = {
+        shipperName: 'Market Up RD',
+        shipperAddress: `Calle Plaza de la Cultura No. 304, El Millón.\nSANTO DOMINGO\nDISTRITO NACIONAL\n18296169842\nSERVICIO NACIONAL PREMIUM`,
+        recipientName: '',
+        recipientPhone: '',
+        recipientAddress: '',
+        recipientCity: '',
+        company: 'Mensajero Privado (Rofanci Encarnación)',
+        declaredValue: '',
+        contentText: '',
+        amount: '',
+        guideNumber: 'PED-010',
+        dateText: '',
+        guideNote: 'Antes de salir 🚚, debes llamar al cliente 📞 • Confirmar disponibilidad • Validar dirección • Confirmar método de pago 💰. MUCHAS GRACIAS!'
+      };
+
+      const manualIds = [
+        'shipperName', 'shipperAddress', 'recipientName', 'recipientPhone', 'recipientAddress',
+        'recipientCity', 'company', 'declaredValue', 'contentText', 'amount', 'guideNumber',
+        'dateText', 'guideNote'
+      ];
+
+      let guideBatch = [];
+      const MAX_PREVIEW_ITEMS = 20;
+
+      // Funciones Utilitarias
+      const getEl = (id) => document.getElementById(id);
+      const getVal = (id) => getEl(id)?.value.trim() || '';
+
+      const debounce = (func, wait) => {
+        let timeout;
+        return function (...args) {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+      };
+
+      const escapeHtml = (value) => {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+
+      const formatGuideNumber = (value) => {
+        const digits = String(value ?? '').replace(/\D/g, '');
+        const num = digits ? parseInt(digits, 10) : 10;
+        return `PED-${String(Math.max(10, num)).padStart(3, '0')}`;
+      };
+
+      const formatDateDisplay = (val) => {
+        if (!val || typeof val !== 'string' || !val.includes('-')) return val;
+        const parts = val.split('-');
+        if (parts[0].length === 4) { // form is YYYY-MM-DD
+          return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return val;
+      };
+
+      const formatCurrency = (val) => {
+        if (!val) return '';
+        const cleanStr = String(val).replace(/RD\$?/ig, '').trim();
+        const num = parseFloat(cleanStr.replace(/,/g, ''));
+        if (isNaN(num)) return val;
+        const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `RD$ ${formatted}`;
+      };
+
+      const extractGuideSequence = (value) => {
+        const match = String(value ?? '').match(/(\d+)/);
+        return match ? Math.max(10, parseInt(match[1], 10)) : 10;
+      };
+
+      // Limpia nombres de columnas para flexibilizar la lectura de excel
+      const normalizeKey = (key) => {
+        return key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, '_');
+      };
+
+      // Formateo de teléfono y validación
+      const formatPhone = (val) => {
+        const digits = val.replace(/\D/g, '');
+        if (digits.length === 0) return '';
+        if (digits.length <= 3) return digits;
+        if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+        return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+      };
+
+      const validatePhone = () => {
+        const input = getEl('recipientPhone');
+        const err = getEl('phoneError');
+        const digits = input.value.replace(/\D/g, '');
+        if (digits.length > 0 && digits.length < 10) {
+          input.classList.add('input-error');
+          err.style.display = 'block';
+        } else {
+          input.classList.remove('input-error');
+          err.style.display = 'none';
+        }
+      };
+
+      // Función guardado local global
+      const saveStateToLocal = () => {
+        try {
+          const draft = getManualData();
+          localStorage.setItem('marketup_guideBatch', JSON.stringify({ batch: guideBatch, draft: draft }));
+        } catch (e) {
+          console.error("Localstorage limit exceeded o error: ", e);
+        }
+      };
+
+      const loadStateFromLocal = () => {
+        const raw = localStorage.getItem('marketup_guideBatch');
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.batch) guideBatch = parsed.batch;
+
+            if (parsed.draft) {
+              setManualDataToForm(parsed.draft);
+            }
+            renderBatch();
+            return true;
+          } catch (e) { console.error(e); }
+        }
+        return false;
+      };
+
+      // --- Generación de Link de WhatsApp con Mensaje ---
+      const getWhatsAppLinkWithMessage = (data) => {
+        let cleanedPhone = String(data.recipientPhone).replace(/\D/g, '');
+        if (cleanedPhone.length === 10) cleanedPhone = '1' + cleanedPhone;
+        if (!cleanedPhone) return '#';
+
+        const message = `¡Hola ${data.recipientName}! Soy ${data.company}\n\nTe escribo para informarte que ya estoy en camino a entregarte tu pedido.\n\n*Detalles de su pedido:*\n- *Guía:* ${data.guideNumber}\n- *Contenido:* ${data.contentText}\n- *Monto a Pagar:* ${data.amount}\n\nPor favor, confírmame si te encuentras disponible para recibirlo en la dirección indicada. ¡Gracias!`;
+        return `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(message)}`;
+      };
+
+      // --- Generación de Código QR ---
+      const generateQRImage = (data) => {
+        if (typeof QRious === 'undefined') return '';
+        const waLinkUrl = getWhatsAppLinkWithMessage(data);
+        const qr = new QRious({
+          value: waLinkUrl,
+          size: 800,
+          level: 'L'
+        });
+        return qr.toDataURL();
+      };
+
+      // Captura y Manejo de Datos Manuales
+      const getManualData = () => {
+        return manualIds.reduce((acc, id) => {
+          acc[id] = id === 'guideNumber' ? formatGuideNumber(getVal(id)) : getVal(id);
+          return acc;
+        }, {});
+      };
+
+      const setManualDataToForm = (item) => {
+        getEl('shipperName').value = item.shipperName || '';
+        getEl('shipperAddress').value = item.shipperAddress || '';
+        getEl('recipientName').value = item.recipientName || '';
+        getEl('recipientPhone').value = item.recipientPhone || '';
+        getEl('recipientAddress').value = item.recipientAddress || '';
+        getEl('recipientCity').value = item.recipientCity || '';
+        getEl('company').value = item.company || '';
+        getEl('declaredValue').value = item.declaredValue || '';
+        getEl('contentText').value = item.contentText || '';
+        getEl('amount').value = item.amount || '';
+        getEl('guideNumber').value = item.guideNumber || '';
+        if (item.dateText) getEl('dateText').value = item.dateText;
+        getEl('guideNote').value = item.guideNote || '';
+      };
+
+      const setManualGuideNumber = (value) => {
+        const format = formatGuideNumber(value);
+        const el = getEl('guideNumber');
+        if (el) el.value = format;
+        saveStateToLocal();
+      };
+
+      const generateNextManualGuide = () => {
+        const current = extractGuideSequence(getVal('guideNumber'));
+        setManualGuideNumber(current + 1);
+        debouncedLoadManualPreview();
+      };
+
+      const resetDefaults = () => {
+        Object.entries(defaults).forEach(([id, value]) => {
+          const el = getEl(id);
+          if (el) el.value = value;
+        });
+
+        const dEl = getEl('dateText');
+        if (dEl && !dEl.value) {
+          dEl.value = new Date().toISOString().split('T')[0];
+        }
+
+        // Recuperamos autonumeración del draft si venía en localstorage, ya reseteado arriba.
+        // Sino auto-numeramos al final del batch actual
+        if (guideBatch.length > 0) {
+          setManualGuideNumber(extractGuideSequence(guideBatch[guideBatch.length - 1].guideNumber) + 1);
+        }
+
+        validatePhone();
+        debouncedLoadManualPreview();
+        showToast('Campos por defecto restaurados', 'info');
+      };
+
+      const addManualGuideToBatch = () => {
+        validatePhone();
+        const input = getEl('recipientPhone');
+        if (input.classList.contains('input-error')) {
+          showToast('Corrige los errores antes de añadir la guía (Teléfono inválido)', 'error');
+          return;
+        }
+
+        const manual = getManualData();
+        guideBatch.push(manual);
+        renderBatch();
+        setManualGuideNumber(extractGuideSequence(manual.guideNumber) + 1);
+
+        // Limpiamos los campos del cliente para la sig.
+        getEl('recipientName').value = '';
+        getEl('recipientPhone').value = '';
+        getEl('recipientCity').value = '';
+        getEl('recipientAddress').value = '';
+        getEl('contentText').value = '';
+        saveStateToLocal();
+        showToast('Guía agregada al lote exitosamente', 'success');
+      };
+
+      const clearBatch = () => {
+        guideBatch = [];
+        renderBatch();
+        saveStateToLocal();
+        showToast('El lote ha sido vaciado', 'warning');
+      };
+
+      // Renderizado UI
+      const buildGuideHTML = (data, index, isManualPreview = false) => {
+        const qrImageURI = generateQRImage(data);
+        const showControls = !isManualPreview;
+
+        const controlsStr = showControls ? `
+          <div class="no-print" style="width: 100%; max-width: 450px; display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px;">
+            <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem;" onclick="ShippingGuideManager.editGuide(${index})"><i data-lucide="edit-2"></i> Editar</button>
+            <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.75rem;" onclick="ShippingGuideManager.deleteGuide(${index})"><i data-lucide="trash-2"></i> Eliminar</button>
+          </div>
+        ` : '';
+
+        // Lucide icons en la plantilla pueden ser problemáticos si es estática, para impresión usamos texto simple o SVG embed, pero aquí no hay SVGs en la hoja final por simplicidad térmica.
+        return `
+          <div style="display:flex; flex-direction:column; align-items:center; width:100%; margin-bottom:16px;">
+            ${controlsStr}
+            <div class="sheet">
+              <div class="label-brand"><div class="brand" style="color: var(--primary);">MARKETUP</div></div>
+              <div class="label">
+              <div class="row">
+                <div class="cell">
+                  <div class="head">REMITENTE:</div>
+                  <div class="body-text bold">${escapeHtml(data.shipperName)}</div>
+                  <div class="small-text">${escapeHtml(data.shipperAddress)}</div>
+                </div>
+                <div class="cell">
+                  <div class="head">DESTINATARIO:</div>
+                  <div class="body-text bold">${escapeHtml(data.recipientName)}</div>
+                  <div class="small-text">${escapeHtml(data.recipientAddress)}<br>${escapeHtml(data.recipientCity)}<br>TEL: ${escapeHtml(data.recipientPhone)}</div>
+                </div>
+              </div>
+              <div class="single">
+                <div class="head">CONTENIDO:</div>
+                <div class="body-text">${escapeHtml(data.contentText)}</div>
+              </div>
+              <div class="single flex-line">
+                <div><span class="head" style="display:inline-block;margin:0 8px 0 0;">VALOR DECLARADO:</span><span class="body-text bold">${escapeHtml(data.declaredValue)}</span></div>
+                <div><span class="head" style="display:inline-block;margin:0 8px 0 0;">RECAUDO:</span><span class="body-text bold">${escapeHtml(data.amount)}</span></div>
+              </div>
+              <div class="single">
+                <div class="head">EMPRESA:</div>
+                <div class="body-text">${escapeHtml(data.company)}</div>
+              </div>
+              
+              <div class="single guide-qr-section">
+                <div>
+                  <div class="head">NÚMERO DE GUÍA #</div>
+                  <div class="guide-number">${escapeHtml(data.guideNumber)}</div>
+                </div>
+                ${qrImageURI ? `<img src="${qrImageURI}" class="qr-image" alt="Código QR de la guía">` : ''}
+              </div>
+
+              <div class="single flex-line">
+                <div><span class="head" style="display:inline-block;margin:0 8px 0 0;">INSTRUCCIÓN DE ENTREGA</span></div>
+                <div><span class="head" style="display:inline-block;margin:0 8px 0 0;">FECHA:</span><span class="date-box">${escapeHtml(formatDateDisplay(data.dateText))}</span></div>
+              </div>
+              <div class="single">
+                <div class="head">NOTA GUÍA:</div>
+                <div class="note">${escapeHtml(data.guideNote)}</div>
+              </div>
+              <div class="single open-note">* * * PERMITIR APERTURA * * *</div>
+            </div>
+            <div class="footer">Guía ${isManualPreview ? 'Borrador' : (index + 1) + ' de ' + guideBatch.length}</div>
+            </div>
+          </div>`;
+      };
+
+      const renderBatch = () => {
+        const stack = getEl('previewStack');
+        const printArea = getEl('printArea');
+        const counter = getEl('guideCount');
+        const emptyState = getEl('emptyState');
+        const limitNotice = getEl('previewLimitNotice');
+
+        const totalItems = guideBatch.length;
+        counter.textContent = totalItems;
+
+        // Render print version (full)
+        if (printArea) {
+          printArea.innerHTML = guideBatch.map((g, i) => buildGuideHTML(g, i, false)).join('');
+        }
+
+        // Manual Draft (siempre preview si hay modificaciones manuales) o vacío
+        const manualData = getManualData();
+        const hasManualContent = !!getVal('recipientName') || !!getVal('recipientPhone');
+        const draftHTML = hasManualContent ? buildGuideHTML(manualData, -1, true) + (totalItems > 0 ? `<hr style="width:100%; max-width:450px; border:1px dashed #ccc; margin: 20px 0;">` : '') : '';
+
+        if (totalItems === 0 && !hasManualContent) {
+          emptyState.style.display = 'flex';
+          stack.innerHTML = '';
+          limitNotice.style.display = 'none';
+          return;
+        }
+
+        emptyState.style.display = 'none';
+
+        // Render UI version (Paginada a 20)
+        let htmlContent = draftHTML;
+        let pagedBatch = guideBatch.slice(0, MAX_PREVIEW_ITEMS);
+
+        htmlContent += pagedBatch.map((g, i) => buildGuideHTML(g, i, false)).join('');
+
+        if (stack) stack.innerHTML = htmlContent;
+
+        if (totalItems > MAX_PREVIEW_ITEMS) {
+          getEl('showingCount').textContent = MAX_PREVIEW_ITEMS;
+          getEl('totalCount').textContent = totalItems;
+          limitNotice.style.display = 'block';
+        } else {
+          limitNotice.style.display = 'none';
+        }
+
+        lucide.createIcons({ root: getEl('previewStack') }); // Recrear iconos por si hay botones dentro (editar/eliminar)
+        saveStateToLocal();
+      };
+
+      const debouncedLoadManualPreview = debounce(() => {
+        renderBatch();
+      }, 300);
+
+      const deleteGuide = (index) => {
+        if (guideBatch.length > index) {
+          guideBatch.splice(index, 1);
+          renderBatch();
+          showToast('Guía eliminada del lote', 'info');
+        }
+      };
+
+      const editGuide = (index) => {
+        if (guideBatch.length > index) {
+          const item = guideBatch[index];
+          setManualDataToForm(item);
+          guideBatch.splice(index, 1);
+          renderBatch();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showToast('Modo edición. Guía movida arriba al borrador', 'warning');
+        }
+      };
+
+      // Procesamiento de Excel
+      const normalizeRow = (row, index, startAt) => {
+        const sequence = startAt + index;
+
+        const cleanRow = {};
+        for (let k in row) {
+          cleanRow[normalizeKey(k)] = row[k];
+        }
+
+        let pedidoRaw = String(cleanRow['pedido'] ?? cleanRow['guide_number'] ?? '').trim();
+        const pedido = pedidoRaw !== '' ? pedidoRaw : sequence;
+
+        const ciudad = cleanRow['ciudad'] ?? '';
+        const direccion = cleanRow['direccion'] ?? cleanRow['recipient_address'] ?? '';
+
+        // Normalización de moneda
+        let valDecl = String(cleanRow['valor_declarado'] ?? cleanRow['declared_value'] ?? cleanRow['monto'] ?? '').trim();
+        let valRec = String(cleanRow['valor_recaudo'] ?? cleanRow['amount'] ?? '').trim();
+
+        if (valDecl) valDecl = formatCurrency(valDecl);
+        if (valRec) valRec = formatCurrency(valRec);
+
+        return {
+          shipperName: String(cleanRow['shipper_name'] ?? defaults.shipperName).trim(),
+          shipperAddress: String(cleanRow['shipper_address'] ?? defaults.shipperAddress).trim(),
+          recipientName: String(cleanRow['destinatario'] ?? cleanRow['nombre'] ?? cleanRow['recipient_name'] ?? '').trim(),
+          recipientPhone: String(cleanRow['telefono'] ?? cleanRow['tel'] ?? cleanRow['recipient_phone'] ?? '').trim(),
+          recipientAddress: String(direccion).trim(),
+          recipientCity: String(ciudad).trim(),
+          company: String(cleanRow['empresa'] ?? cleanRow['company'] ?? defaults.company).trim(),
+          declaredValue: valDecl,
+          contentText: String(cleanRow['productos'] ?? cleanRow['contenido'] ?? cleanRow['content_text'] ?? '').trim(),
+          amount: valRec,
+          guideNumber: formatGuideNumber(pedido),
+          dateText: String(cleanRow['date_text'] ?? defaults.dateText).trim(),
+          guideNote: String(cleanRow['notas'] ?? cleanRow['nota'] ?? cleanRow['guide_note'] ?? defaults.guideNote).trim()
+        };
+      };
+
+      const importSpreadsheet = async () => {
+        const fileInput = getEl('fileInput');
+        const file = fileInput?.files[0];
+        if (!file) return;
+
+        try {
+          const startAt = Math.max(10, parseInt(getVal('startSequence') || '10', 10));
+          const buffer = await file.arrayBuffer();
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+
+          if (!rows.length) throw new Error('El documento está vacío.');
+
+          const seen = new Set(guideBatch.map(g => g.guideNumber)); // Prevenir choque con actuales
+          const importedBatch = rows.map((row, index) => {
+            const item = normalizeRow(row, index, startAt);
+
+            if (seen.has(item.guideNumber)) {
+              item.guideNumber = formatGuideNumber(startAt + index + 999); // Evitar colisiones simples
+            }
+            while (seen.has(item.guideNumber)) {
+              item.guideNumber = formatGuideNumber(extractGuideSequence(item.guideNumber) + 1);
+            }
+            seen.add(item.guideNumber);
+            return item;
+          });
+
+          guideBatch = [...guideBatch, ...importedBatch];
+          renderBatch();
+
+          if (guideBatch.length > 0) {
+            setManualGuideNumber(extractGuideSequence(guideBatch[guideBatch.length - 1].guideNumber) + 1);
+          }
+
+          fileInput.value = '';
+          showToast(`${importedBatch.length} guías importadas correctamente`, 'success');
+
+        } catch (error) {
+          console.error("Error Excel:", error);
+          showToast('Error al leer el archivo. Revisa el formato.', 'error');
+        }
+      };
+
+      // Exportación (XLSX)
+      const exportFilledTemplate = () => {
+        if (!guideBatch.length) return showToast('No hay guías para exportar en el lote.', 'error');
+
+        const rows = guideBatch.map((item) => ({
+          'Pedido': item.guideNumber,
+          'Destinatario': item.recipientName,
+          'Telefono': item.recipientPhone,
+          'Direccion': item.recipientAddress,
+          'Ciudad': item.recipientCity,
+          'Productos': item.contentText,
+          'Empresa': item.company,
+          'Valor Declarado': item.declaredValue,
+          'Valor Recaudo': item.amount,
+          'Notas': item.guideNote
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Pedidos');
+        XLSX.writeFile(workbook, 'Plantilla_Marketup_Llena.xlsx');
+        showToast('Exportación descargada correctamente.', 'success');
+      };
+
+      // Plantilla Descargable Ahora en Excel (.xlsx)
+      const downloadTemplate = () => {
+        const templateData = [
+          {
+            'Pedido': 'PED-010',
+            'Destinatario': 'Cliente Ejemplo',
+            'Telefono': '8090000001',
+            'Direccion': 'Calle principal 123',
+            'Ciudad': 'Santo Domingo',
+            'Productos': '1 x Smart Ring',
+            'Empresa': 'Mensajero Privado',
+            'Valor Declarado': '2445.00',
+            'Valor Recaudo': '2445.00',
+            'Notas': 'Llamar antes de entregar'
+          },
+          {
+            'Pedido': 'PED-011',
+            'Destinatario': 'Otro Cliente',
+            'Telefono': '8090000002',
+            'Direccion': 'Avenida central 45',
+            'Ciudad': 'Santiago',
+            'Productos': '2 x Audífonos Bluetooth',
+            'Empresa': 'Mensajero Privado',
+            'Valor Declarado': '1890.00',
+            'Valor Recaudo': '1890.00',
+            'Notas': 'Entregar en recepción'
+          }
+        ];
+
+        const worksheet = XLSX.utils.json_to_sheet(templateData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Carga');
+        XLSX.writeFile(workbook, 'Plantilla_Importacion_Guias.xlsx');
+        showToast('Plantilla Excel descargada.', 'success');
+      };
+
+      // --- Generar PDF de Listado para Mensajero ---
+      const printCourierList = () => {
+        if (!guideBatch.length) return showToast('No hay guías cargadas para generar el listado.', 'error');
+
+        let rowsHTML = '';
+        guideBatch.forEach((item) => {
+          const waLink = getWhatsAppLinkWithMessage(item);
+          rowsHTML += `
+            <tr>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${item.guideNumber}</strong></td>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd;">${item.recipientName}<br><small style="color:#666;">${item.recipientPhone}</small></td>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${item.contentText}</td>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 200px;">${item.recipientAddress}, ${item.recipientCity}</td>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd;">${item.amount}</td>
+              <td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: center;">
+                <a href="${waLink}" target="_blank" style="color: #0056b3; text-decoration: underline; font-weight: bold; font-family: sans-serif; font-size: 14px;">
+                  Link WhatsApp
+                </a>
+              </td>
+            </tr>
+          `;
+        });
+
+        const printWin = window.open('', '_blank');
+        if (!printWin) { return showToast('Desbloquea los pop-ups del navegador temporalmente.', 'warning'); }
+
+        printWin.document.write(`
+          <!DOCTYPE html>
+          <html lang="es">
+            <head>
+              <meta charset="UTF-8">
+              <title>Listado de Despacho Mensajero</title>
+              <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+                th { background-color: #f8f9fa; padding: 14px 12px; text-align: left; border-bottom: 2px solid #dee2e6; color: #495057; }
+                td { vertical-align: middle; }
+                tr:nth-child(even) { background-color: #f8f9fc; }
+                @media print {
+                  @page { size: A4 portrait; margin: 15mm; }
+                  a { text-decoration: none !important; }
+                  button.no-print { display: none !important; }
+                }
+              </style>
+            </head>
+            <body>
+              <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3f35fe; padding-bottom: 10px; margin-bottom: 15px;">
+                 <div>
+                   <h1 style="margin: 0; color: #3f35fe;">Listado de Despacho</h1>
+                   <h3 style="margin: 5px 0 0 0; color: #495057; letter-spacing: 1px;">MarketUP RD</h3>
+                 </div>
+                 <button class="no-print" onclick="window.print()" style="background:#3f35fe; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:16px;">
+                   Guardar PDF / Imprimir
+                 </button>
+              </div>
+              <p style="font-size: 16px;"><strong>Fecha del Listado:</strong> ${new Date().toLocaleDateString('es-DO')} a las ${new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })} &nbsp;|&nbsp; <strong>Total Paquetes:</strong> ${guideBatch.length}</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Guía</th>
+                    <th>Cliente</th>
+                    <th>Contenido</th>
+                    <th>Dirección</th>
+                    <th>Recaudo</th>
+                    <th style="text-align: center;">Vía Rápida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHTML}
+                </tbody>
+              </table>
+              <script>
+                 setTimeout(() => { window.print(); }, 500);
+              <\/script>
+            </body>
+          </html>
+        `);
+        printWin.document.close();
+      };
+
+      // Inicialización
+      const init = () => {
+        const loaded = loadStateFromLocal();
+        if (!loaded) resetDefaults(); // Solo resetea defaults si no había draft anterior
+
+        manualIds.forEach((id) => {
+          const el = getEl(id);
+          if (el) {
+            el.addEventListener('input', (e) => {
+              if (id === 'guideNumber') e.target.value = e.target.value.toUpperCase();
+
+              if (id === 'recipientPhone') {
+                const format = formatPhone(e.target.value);
+                e.target.value = format;
+                validatePhone();
+              }
+
+              debouncedLoadManualPreview();
+            });
+
+            if (id === 'declaredValue' || id === 'amount') {
+              el.addEventListener('blur', (e) => {
+                if (e.target.value.trim() !== '') {
+                  e.target.value = formatCurrency(e.target.value);
+                  debouncedLoadManualPreview();
+                }
+              });
+            }
+          }
+        });
+
+        getEl('guideNumber')?.addEventListener('blur', (e) => {
+          setManualGuideNumber(e.target.value);
+          debouncedLoadManualPreview();
+        });
+
+        // Prevent form submission defaults on enters
+        document.querySelector('aside')?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+          }
+        });
+
+      };
+
+      return {
+        init, importSpreadsheet, exportFilledTemplate, downloadTemplate,
+        addManualGuideToBatch, clearBatch, generateNextManualGuide, resetDefaults,
+        deleteGuide, editGuide, printCourierList
+      };
+    })();
+
+    document.addEventListener('DOMContentLoaded', ShippingGuideManager.init);
+  </script>
+</body>
+
+</html>
