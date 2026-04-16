@@ -627,7 +627,7 @@
     lucide.createIcons();
 
     // -------------------------------------------------------------
-    // MOTOR DE INTELIGENCIA ARTIFICIAL (GEMINI API)
+    // MOTOR DE INTELIGENCIA ARTIFICIAL (TOLERANTE A FALLOS Y USO LOCAL)
     // -------------------------------------------------------------
     const GeminiAPI = (() => {
       const apiKey = ""; // La clave será proveída por el entorno de ejecución
@@ -635,16 +635,21 @@
       const getLocalKey = () => localStorage.getItem('marketup_ai_key') || "";
       const setLocalKey = (key) => localStorage.setItem('marketup_ai_key', key);
 
-      const callLLM = async (prompt, fallbackText = "Respuesta de IA no disponible temporalmente.") => {
-        const finalKey = apiKey || getLocalKey();
+      const callLLM = async (promptText, fallbackText = "Respuesta de IA no disponible temporalmente.") => {
+        const localKey = getLocalKey();
+        const finalKey = apiKey || localKey;
 
         if (!finalKey) {
-          console.warn("Modo Local: No se detectó API Key. Usando respaldo.");
+          console.warn("Modo Local: No se detectó API Key. Usando respuestas automáticas de respaldo.");
           return fallbackText;
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${finalKey}`;
-        const payload = { contents: [{ parts: [{ text: prompt }] }] };
+        // Si es una llave configurada manualmente, usamos un modelo público universal.
+        // Si es la llave automática de Google, usamos el modelo de preview.
+        const modelName = (finalKey === apiKey) ? "gemini-2.5-flash-preview-09-2025" : "gemini-1.5-flash";
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${finalKey}`;
+        
+        const payload = { contents: [{ parts: [{ text: promptText }] }] };
         const delays = [1000, 2000, 4000];
 
         for (let i = 0; i < 3; i++) {
@@ -655,8 +660,9 @@
               body: JSON.stringify(payload)
             });
             
-            if (response.status === 403) {
-              console.warn("API 403 Forbidden. Usando respaldo.");
+            // 403 (Forbidden) o 404 (Not Found): No hay permisos o el modelo no es soportado por esa llave.
+            if (response.status === 403 || response.status === 404) {
+              console.warn(`API Error ${response.status}. Llave inválida o sin permisos para el modelo. Usando respaldo.`);
               return fallbackText;
             }
             
@@ -802,7 +808,6 @@
 
         const prompt = `Eres un experto en logística en República Dominicana. Toma la siguiente dirección escrita por un cliente y corrígela. Asegúrate de que tenga buena ortografía, usa mayúsculas iniciales correctamente y estandariza el formato para que sea lo más clara y fácil de leer posible para un mensajero de Santo Domingo. Si menciona referencias raras, ponlas entre paréntesis. IMPORTANTE: Devuelve ÚNICAMENTE la dirección corregida. No incluyas saludos. Dirección original: ${originalAddress}`;
         
-        // Si hay error 403, devolvemos la misma dirección para no romper el flujo
         const fallbackAddr = originalAddress;
         const optimizedText = await GeminiAPI.callLLM(prompt, fallbackAddr);
         
@@ -881,7 +886,6 @@
         
         saveStateToLocal();
         
-        // Actualizar UI del Dashboard badge
         const badge = getEl('gen-badge');
         if (badge) {
             badge.textContent = totalItems;
@@ -1002,19 +1006,16 @@
       let currentFilter = 'Todos';
       let currentSearch = '';
       
-      // Filtros de fecha
       let filterDateFrom = '';
       let filterDateTo = '';
 
-      // --- Función local para estimar costo de envío por localidad ---
       const calculateCourierCostLocal = (city, address, baseRate) => {
         const loc = String(city + " " + address).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (loc.includes('haina') || loc.includes('san cristobal') || loc.includes('boca chica') || loc.includes('pedro brand') || loc.includes('boca de nigua')) return 450; 
         if (loc.includes('este') || loc.includes('sde') || loc.includes('san isidro') || loc.includes('norte') || loc.includes('sdn') || loc.includes('villa mella') || loc.includes('oeste') || loc.includes('sdo') || loc.includes('herrera') || loc.includes('caobas') || loc.includes('alcarrizos')) return 350; 
-        return baseRate; // Tarifa base (300) para Distrito Nacional y otros
+        return baseRate; 
       };
 
-      // --- FEATURE IA: Calcular tarifas exactas de envío ---
       const calculateCostsWithAI = async () => {
         if (orders.length === 0) return showToast("No hay pedidos para analizar.", "warning");
         const btn = document.getElementById('btn-ai-cost');
@@ -1033,7 +1034,6 @@
         Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta: {"ID_DEL_PEDIDO": tarifa_numerica}. No incluyas markdown (\`\`\`).
         Lista: ${ordersToAnalyze.join('\n')}`;
 
-        // Fallback robusto en caso de error 403 o fallo general de la IA
         const fallbackJSON = JSON.stringify(
           orders.reduce((acc, o) => { acc[o.id] = calculateCourierCostLocal(o.city, o.address, rate); return acc; }, {})
         );
@@ -1095,7 +1095,7 @@
           const mStatus = currentFilter === 'Todos' || o.status.includes(currentFilter) || (currentFilter === 'Cancelado' && o.status.includes('Devolución'));
           
           let mDate = true;
-          const targetDate = o.deliveryDate || o.date; // Usa la fecha de entrega si existe, si no usa la de creación
+          const targetDate = o.deliveryDate || o.date; 
           if (filterDateFrom && targetDate < filterDateFrom) mDate = false;
           if (filterDateTo && targetDate > filterDateTo) mDate = false;
 
@@ -1168,7 +1168,6 @@
         if (order) { 
           order.status = newStatus; 
 
-          // Lógica automática para Pendiente (al día siguiente)
           if (newStatus === 'Pendiente') {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1193,7 +1192,6 @@
         const pending = orders.filter(o => !o.status.includes('Entregado') && !o.status.includes('Cancelado') && !o.status.includes('Devolución'));
         const totalRevenue = delivered.reduce((sum, o) => sum + o.numericAmount, 0);
         
-        // Calcular pago sumando el costo dinámico de cada pedido entregado
         const totalPago = delivered.reduce((sum, o) => sum + (o.aiCalculated ? o.courierCost : DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)), 0);
         
         document.getElementById('stat-total').textContent = orders.length;
@@ -1211,7 +1209,6 @@
         return `<span class="status-badge" style="background:#FEF3C7; color:#92400E;">${status}</span>`;
       };
 
-      // FEATURE IA: Mensaje Inteligente para WhatsApp
       const generateSmartWA = async (id) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
@@ -1229,7 +1226,6 @@
         Pídele amablemente que confirme si estará disponible para recibir en esta dirección: "${order.address}, ${order.city}".
         No uses markdown (\`\`\`), no pongas saludos genéricos tuyos, simplemente dame el mensaje directo listo para enviarse. Usa algunos emojis sutiles.`;
 
-        // Plantilla local a usar en caso de que el entorno bloquee la IA
         const fallbackWA = `¡Hola ${order.name}! 👋 Soy tu asistente de Marketup.\n\nTe escribo para informarte que tu pedido (${order.product}) con la guía #${order.id} está listo/en camino. 🚚\n\nEl monto a pagar es de ${order.amountStr}. 💰\n\nPor favor, confírmame si estarás disponible para recibirlo en: ${order.address}, ${order.city}. ¡Muchas gracias! ✨`;
 
         const mensaje = await GeminiAPI.callLLM(prompt, fallbackWA);
@@ -1244,7 +1240,6 @@
         window.open(url, '_blank');
       };
 
-      // FEATURE IA: Recuperar Pedido Cancelado
       const generateWinBackWA = async (id) => {
         const order = orders.find(o => o.id === id);
         if (!order) return;
@@ -1274,7 +1269,6 @@
         window.open(url, '_blank');
       };
 
-      // FEATURE IA: Extracción Mágica del Chat
       const magicPasteAI = async () => {
         const rawText = document.getElementById('magic-paste-text').value.trim();
         if(!rawText) return showToast('Pega el texto del cliente primero.', 'warning');
@@ -1319,7 +1313,6 @@
         lucide.createIcons();
       };
 
-      // FEATURE IA: Analizador de Ruta General
       const analyzeRouteWithAI = async () => {
         const pending = orders.filter(o => !o.status.includes('Entregado') && !o.status.includes('Cancelado') && !o.status.includes('Devolución'));
         if (pending.length === 0) return showToast("No tienes pedidos pendientes para analizar.", "warning");
@@ -1342,7 +1335,6 @@
         Lista de entregas:
         ${orderData}`;
 
-        // Mensaje de respaldo en caso de que el entorno bloquee la IA
         const fallbackRoute = `<b>¡Hola equipo!</b> 👋<br><br><span style="color: #DC2626; font-size:0.85em;"><i>Nota: La IA completa no está disponible en este momento debido a restricciones de conexión del entorno.</i></span><br><br>Sin embargo, hemos detectado <b>${pending.length} pedidos pendientes</b> para entregar.<br><br>Recomendación rápida: Agrupa los paquetes geográficamente (Norte, Este, Oeste, Distrito) en el vehículo antes de salir para ahorrar tiempo y combustible. 🚚💨<br><br>¡Mucho éxito en la ruta de hoy!`;
 
         const analysis = await GeminiAPI.callLLM(prompt, fallbackRoute);
@@ -1407,7 +1399,8 @@
               }
             </td>
           </tr>
-        `}).join('');
+        `;
+        }).join('');
         lucide.createIcons();
         updateSelectedUI();
       };
@@ -1421,7 +1414,6 @@
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
 
-          // Función mejorada para limpiar los nombres de las columnas, incluyendo caracteres ocultos de Excel
           const normalizeDashKey = (key) => String(key).replace(/^\uFEFF/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, '_');
 
           const newOrders = rows.map((row, idx) => {
@@ -1460,10 +1452,9 @@
           const existingMap = new Map(orders.map(o => [o.id, o]));
 
           newOrders.forEach(o => {
-            if (o.name === 'Sin Nombre') return; // Saltar filas vacías
+            if (o.name === 'Sin Nombre') return;
             
             if (existingMap.has(o.id)) {
-              // Si el ID ya existe, actualizar el registro
               const existing = existingMap.get(o.id);
               existing.name = o.name;
               existing.phone = o.phone;
@@ -1479,7 +1470,6 @@
               if (o.deliveryDate) existing.deliveryDate = o.deliveryDate;
               updated++;
             } else {
-              // Si el ID es nuevo, agregarlo a la lista
               orders.push(o);
               added++;
             }
@@ -1510,7 +1500,6 @@
         switchTab('generator');
       };
 
-      // --- NUEVAS FUNCIONES DE BORRADO ---
       const deleteSelected = () => {
         if(confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.size} pedidos del panel?`)) {
           orders = orders.filter(o => !selectedIds.has(o.id));
@@ -1533,7 +1522,6 @@
         }
       };
 
-      // --- NUEVO: CAMBIO DE ESTADO MASIVO ---
       const bulkUpdateStatus = (newStatus) => {
         if(confirm(`¿Estás seguro de que deseas cambiar el estado a "${newStatus}" para ${selectedIds.size} pedido(s)?`)) {
           let updatedCount = 0;
@@ -1555,7 +1543,6 @@
         }
       };
 
-      // --- CREACIÓN DE PEDIDO MANUAL DESDE EL DASHBOARD ---
       const saveNewOrder = (e) => {
         e.preventDefault();
         const name = document.getElementById('new-name').value.trim();
@@ -1587,7 +1574,7 @@
           aiCalculated: false
         };
 
-        orders.unshift(newOrder); // Lo agrega al principio de la lista
+        orders.unshift(newOrder);
         save();
         renderStats();
         renderTable();
