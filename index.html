@@ -316,6 +316,9 @@
         <button onclick="DashboardManager.analyzeRouteWithAI()" class="btn ai-btn" style="padding: 10px 16px; font-size: 0.9rem;" id="btn-ai-route">
           ✨ Analizar Ruta Pendiente
         </button>
+        <button onclick="DashboardManager.configureAI()" class="btn btn-outline" style="padding: 10px 16px; font-size: 0.9rem;" title="Configurar IA (Solo para uso local)">
+          <i data-lucide="settings"></i> Config IA
+        </button>
         <button onclick="DashboardManager.clearAllDashboard()" class="btn btn-outline" style="background: #FEF2F2; color: var(--danger); border-color: #FCA5A5;" title="Vaciar todo el panel">
           <i data-lucide="trash-2"></i> Vaciar Todo
         </button>
@@ -610,15 +613,25 @@
     lucide.createIcons();
 
     // -------------------------------------------------------------
-    // MOTOR DE INTELIGENCIA ARTIFICIAL (TOLERANTE A FALLOS DE ENTORNO)
+    // MOTOR DE INTELIGENCIA ARTIFICIAL (GEMINI API)
     // -------------------------------------------------------------
     const GeminiAPI = (() => {
       const apiKey = ""; // La clave será proveída por el entorno de ejecución
       
+      const getLocalKey = () => localStorage.getItem('marketup_ai_key') || "";
+      const setLocalKey = (key) => localStorage.setItem('marketup_ai_key', key);
+
       const callLLM = async (prompt, fallbackText = "Respuesta de IA no disponible temporalmente.") => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+        const finalKey = apiKey || getLocalKey();
+
+        if (!finalKey) {
+          console.warn("Modo Local: No se detectó API Key. Usando respaldo.");
+          return fallbackText;
+        }
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${finalKey}`;
         const payload = { contents: [{ parts: [{ text: prompt }] }] };
-        const delays = [1000, 2000, 4000]; // Retrasos más cortos para no bloquear la interfaz
+        const delays = [1000, 2000, 4000];
 
         for (let i = 0; i < 3; i++) {
           try {
@@ -628,10 +641,8 @@
               body: JSON.stringify(payload)
             });
             
-            // Si el servidor de IA está bloqueado (Error 403), no lo intentamos 3 veces, 
-            // pasamos directamente a darte una respuesta funcional de respaldo.
             if (response.status === 403) {
-              console.warn("API 403 Forbidden. Entorno sin permisos. Usando respuesta de respaldo.");
+              console.warn("API 403 Forbidden. Usando respaldo.");
               return fallbackText;
             }
             
@@ -641,14 +652,14 @@
           } catch (error) {
             if (i === 2) {
               console.error("Gemini API Error Final:", error);
-              return fallbackText; // Si todo falla, entregamos un resultado base que no rompa tu programa
+              return fallbackText;
             }
             await new Promise(r => setTimeout(r, delays[i]));
           }
         }
       };
 
-      return { callLLM };
+      return { callLLM, setLocalKey, getLocalKey };
     })();
 
 
@@ -1491,9 +1502,24 @@
         showToast(`Pedido ${id} creado exitosamente`, 'success');
       };
 
+      const configureAI = () => {
+        const currentKey = GeminiAPI.getLocalKey();
+        const msg = "Para usar la IA avanzada fuera de esta plataforma (en tu computadora local), necesitas una API Key gratuita de Google Gemini.\n\nPega tu API Key aquí:\n(Déjalo en blanco para usar el modo offline de respaldo)";
+        const newKey = prompt(msg, currentKey);
+        
+        if (newKey !== null) {
+          GeminiAPI.setLocalKey(newKey.trim());
+          if (newKey.trim()) {
+            showToast("API Key guardada. IA avanzada activada.", "success");
+          } else {
+            showToast("API Key borrada. Funcionando en modo offline.", "info");
+          }
+        }
+      };
+
       document.addEventListener('DOMContentLoaded', () => { load(); renderStats(); renderTable(); });
 
-      return { importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, analyzeRouteWithAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus };
+      return { importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, analyzeRouteWithAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus, configureAI };
     })();
   </script>
 </body>
