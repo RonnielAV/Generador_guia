@@ -327,7 +327,7 @@
           <i data-lucide="download"></i> Exportar
         </button>
 
-        <!-- NUEVO: Selector de cambio de estado masivo -->
+        <!-- Selector de cambio de estado masivo -->
         <select id="bulk-status-select" class="btn btn-outline" style="background: white; display: none; cursor: pointer; padding: 10px 16px; font-size: 0.85rem; border-color: var(--primary); color: var(--primary); font-weight: bold;" onchange="if(this.value) { DashboardManager.bulkUpdateStatus(this.value); this.value=''; }">
           <option value="">Cambiar Estado...</option>
           <option value="En Proceso">En Proceso</option>
@@ -605,35 +605,43 @@
   <!-- AREA DE IMPRESIÓN -->
   <div id="printArea" class="print-only"></div>
 
-  <!-- SCRIPT UNIFICADO CON INTELIGENCIA ARTIFICIAL -->
+  <!-- SCRIPT UNIFICADO CON INTELIGENCIA ARTIFICIAL TOLERANTE A FALLOS -->
   <script>
     lucide.createIcons();
 
     // -------------------------------------------------------------
-    // MOTOR DE INTELIGENCIA ARTIFICIAL (GEMINI API)
+    // MOTOR DE INTELIGENCIA ARTIFICIAL (TOLERANTE A FALLOS DE ENTORNO)
     // -------------------------------------------------------------
     const GeminiAPI = (() => {
       const apiKey = ""; // La clave será proveída por el entorno de ejecución
       
-      const callLLM = async (prompt) => {
+      const callLLM = async (prompt, fallbackText = "Respuesta de IA no disponible temporalmente.") => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
         const payload = { contents: [{ parts: [{ text: prompt }] }] };
-        const delays = [1000, 2000, 4000, 8000, 16000];
+        const delays = [1000, 2000, 4000]; // Retrasos más cortos para no bloquear la interfaz
 
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 3; i++) {
           try {
             const response = await fetch(url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
             });
+            
+            // Si el servidor de IA está bloqueado (Error 403), no lo intentamos 3 veces, 
+            // pasamos directamente a darte una respuesta funcional de respaldo.
+            if (response.status === 403) {
+              console.warn("API 403 Forbidden. Entorno sin permisos. Usando respuesta de respaldo.");
+              return fallbackText;
+            }
+            
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const result = await response.json();
-            return result.candidates?.[0]?.content?.parts?.[0]?.text || "No se generó respuesta de la IA.";
+            return result.candidates?.[0]?.content?.parts?.[0]?.text || fallbackText;
           } catch (error) {
-            if (i === 4) {
+            if (i === 2) {
               console.error("Gemini API Error Final:", error);
-              return "Error de conexión con la IA. Por favor, intenta de nuevo más tarde.";
+              return fallbackText; // Si todo falla, entregamos un resultado base que no rompa tu programa
             }
             await new Promise(r => setTimeout(r, delays[i]));
           }
@@ -676,7 +684,7 @@
     };
 
     // -------------------------------------------------------------
-    // LOGICA ORIGINAL DEL GENERADOR DE GUÍAS (Ahora con IA)
+    // LOGICA ORIGINAL DEL GENERADOR DE GUÍAS
     // -------------------------------------------------------------
     const ShippingGuideManager = (() => {
       const defaults = {
@@ -767,22 +775,24 @@
         lucide.createIcons();
         btn.disabled = true;
 
-        const prompt = `Eres un experto en logística en República Dominicana. Toma la siguiente dirección escrita por un cliente y corrígela. Asegúrate de que tenga buena ortografía, usa mayúsculas iniciales correctamente y estandariza el formato para que sea lo más clara y fácil de leer posible para un mensajero de Santo Domingo. Si menciona referencias raras, ponlas entre paréntesis.
+        const prompt = `Eres un experto en logística en República Dominicana. Toma la siguiente dirección escrita por un cliente y corrígela. Asegúrate de que tenga buena ortografía, usa mayúsculas iniciales correctamente y estandariza el formato para que sea lo más clara y fácil de leer posible para un mensajero de Santo Domingo. Si menciona referencias raras, ponlas entre paréntesis. IMPORTANTE: Devuelve ÚNICAMENTE la dirección corregida. No incluyas saludos. Dirección original: ${originalAddress}`;
         
-        IMPORTANTE: Devuelve ÚNICAMENTE la dirección corregida. No incluyas saludos, explicaciones, ni comillas.
-        
-        Dirección original: ${originalAddress}`;
-
-        const optimizedText = await GeminiAPI.callLLM(prompt);
+        // Si hay error 403, devolvemos la misma dirección para no romper el flujo
+        const fallbackAddr = originalAddress;
+        const optimizedText = await GeminiAPI.callLLM(prompt, fallbackAddr);
         
         addrInput.value = optimizedText.trim();
-        // Disparar evento para que la vista previa se actualice
         addrInput.dispatchEvent(new Event('input', { bubbles: true }));
         
         btn.innerHTML = `✨ Optimizar`;
         btn.disabled = false;
         lucide.createIcons();
-        showToast("Dirección optimizada con IA ✨", "success");
+        
+        if (optimizedText === fallbackAddr) {
+           showToast("Servicio IA no disponible temporalmente. Dirección sin cambios.", "warning");
+        } else {
+           showToast("Dirección optimizada con IA ✨", "success");
+        }
       };
 
       const buildGuideHTML = (data, index, isManualPreview = false) => {
@@ -996,18 +1006,21 @@
 
         Analiza estas ubicaciones y asigna la tarifa correcta a cada pedido según la ciudad, sector o barrio indicado.
         Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta: {"ID_DEL_PEDIDO": tarifa_numerica}. No incluyas markdown (\`\`\`).
-        
-        Lista:
-        ${ordersToAnalyze.join('\n')}`;
+        Lista: ${ordersToAnalyze.join('\n')}`;
+
+        // Fallback robusto en caso de error 403 o fallo general de la IA
+        const fallbackJSON = JSON.stringify(
+          orders.reduce((acc, o) => { acc[o.id] = calculateCourierCostLocal(o.city, o.address, rate); return acc; }, {})
+        );
 
         try {
-          const aiResponse = await GeminiAPI.callLLM(prompt);
+          const aiResponse = await GeminiAPI.callLLM(prompt, fallbackJSON);
           const cleanJsonStr = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
           const costMap = JSON.parse(cleanJsonStr);
           
           let updatedCount = 0;
           orders = orders.map(o => {
-            if (costMap[o.id]) {
+            if (costMap[o.id] !== undefined) {
               updatedCount++;
               return { ...o, courierCost: costMap[o.id], aiCalculated: true };
             }
@@ -1015,10 +1028,15 @@
           });
           
           save(); renderStats(); renderTable();
-          showToast(`Tarifas precisas calculadas con IA para ${updatedCount} pedidos.`, "success");
+          
+          if (aiResponse === fallbackJSON) {
+             showToast("Servicio IA no disponible temporalmente. Se calcularon tarifas con reglas locales.", "warning");
+          } else {
+             showToast(`Tarifas precisas calculadas con IA para ${updatedCount} pedidos.`, "success");
+          }
         } catch (e) {
           console.error(e);
-          showToast("Error de IA al calcular tarifas.", "error");
+          showToast("Error procesando los datos de las tarifas.", "error");
         }
         if(btn) { btn.innerHTML = `✨ IA`; btn.disabled = false; }
       };
@@ -1186,7 +1204,10 @@
         Pídele amablemente que confirme si estará disponible para recibir en esta dirección: "${order.address}, ${order.city}".
         No uses markdown (\`\`\`), no pongas saludos genéricos tuyos, simplemente dame el mensaje directo listo para enviarse. Usa algunos emojis sutiles.`;
 
-        const mensaje = await GeminiAPI.callLLM(prompt);
+        // Plantilla local a usar en caso de que el entorno bloquee la IA
+        const fallbackWA = `¡Hola ${order.name}! 👋 Soy tu asistente de Marketup.\n\nTe escribo para informarte que tu pedido (${order.product}) con la guía #${order.id} está listo/en camino. 🚚\n\nEl monto a pagar es de ${order.amountStr}. 💰\n\nPor favor, confírmame si estarás disponible para recibirlo en: ${order.address}, ${order.city}. ¡Muchas gracias! ✨`;
+
+        const mensaje = await GeminiAPI.callLLM(prompt, fallbackWA);
         
         btn.innerHTML = originalIcon;
         btn.disabled = false;
@@ -1221,7 +1242,10 @@
         Lista de entregas:
         ${orderData}`;
 
-        const analysis = await GeminiAPI.callLLM(prompt);
+        // Mensaje de respaldo en caso de que el entorno bloquee la IA
+        const fallbackRoute = `<b>¡Hola equipo!</b> 👋<br><br><span style="color: #DC2626; font-size:0.85em;"><i>Nota: La IA completa no está disponible en este momento debido a restricciones de conexión del entorno.</i></span><br><br>Sin embargo, hemos detectado <b>${pending.length} pedidos pendientes</b> para entregar.<br><br>Recomendación rápida: Agrupa los paquetes geográficamente (Norte, Este, Oeste, Distrito) en el vehículo antes de salir para ahorrar tiempo y combustible. 🚚💨<br><br>¡Mucho éxito en la ruta de hoy!`;
+
+        const analysis = await GeminiAPI.callLLM(prompt, fallbackRoute);
         
         document.getElementById('ai-modal-body').innerHTML = analysis;
         document.getElementById('ai-modal').style.display = 'flex';
