@@ -230,7 +230,7 @@
     </div>
   </div>
 
-  <!-- MODAL NUEVO PEDIDO MANUAL -->
+  <!-- MODAL NUEVO PEDIDO MANUAL CON IA EXTRACTORA -->
   <div id="new-order-modal" class="modal-overlay no-print">
     <div class="modal-content" style="max-width: 500px;">
       <div class="modal-header">
@@ -240,6 +240,20 @@
         <button class="modal-close" onclick="document.getElementById('new-order-modal').style.display='none'"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
+        
+        <!-- FEATURE IA: EXTRACCIÓN MÁGICA -->
+        <div class="form-group" style="background: #F3E8FF; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #A855F7;">
+            <label style="color: #6B21A8; font-weight: bold; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+              <i data-lucide="wand-2" style="width:16px; height:16px;"></i> Extracción Mágica de WhatsApp
+            </label>
+            <div style="display:flex; gap:8px;">
+              <textarea id="magic-paste-text" rows="2" placeholder="Ej: Hola, mándame un Smart Ring a la Calle Sol #2, Herrera. Soy María 809-555-1234." style="flex:1; border-color: #D8B4FE; font-size: 0.8rem; min-height: 50px;"></textarea>
+              <button type="button" class="btn ai-btn" onclick="DashboardManager.magicPasteAI()" id="btn-magic-paste" style="align-self: stretch; padding: 0 16px;">✨ Llenar</button>
+            </div>
+            <p style="font-size: 0.7rem; color: #9333EA; margin-top: 6px; line-height: 1.2;">Pega el mensaje desordenado del cliente y la IA llenará el formulario de abajo automáticamente.</p>
+        </div>
+        <hr style="border-top: 1px solid var(--border); margin-bottom: 16px;">
+
         <form id="new-order-form" onsubmit="DashboardManager.saveNewOrder(event)">
           <div class="form-row">
             <div class="form-group">
@@ -1230,6 +1244,81 @@
         window.open(url, '_blank');
       };
 
+      // FEATURE IA: Recuperar Pedido Cancelado
+      const generateWinBackWA = async (id) => {
+        const order = orders.find(o => o.id === id);
+        if (!order) return;
+
+        const btn = document.getElementById(`wa-winback-${id}`);
+        const originalIcon = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:16px;height:16px;"></i>`;
+        lucide.createIcons();
+        btn.disabled = true;
+
+        const prompt = `Actúa como un representante de servicio al cliente de 'Marketup' en República Dominicana.
+        El cliente "${order.name}" canceló su pedido o no se le pudo entregar ("${order.product}").
+        Redacta un mensaje de WhatsApp empático, preguntando amablemente si tuvo algún inconveniente y ofreciéndole reprogramar la entrega para otra fecha.
+        Hazlo sonar natural y dominicano, sin ser invasivo. No uses markdown (\`\`\`), no incluyas saludos genéricos tuyos al principio, devuelve solo el texto final a enviar con algunos emojis.`;
+
+        const fallbackWA = `¡Hola ${order.name}! 👋 Te escribimos de Marketup. Lamentamos que no hayas podido recibir tu pedido de ${order.product}. Estamos siempre a tu orden. Si deseas reprogramarlo para otra fecha, déjanos saber y con gusto te ayudamos. ¡Feliz día! ✨`;
+
+        const mensaje = await GeminiAPI.callLLM(prompt, fallbackWA);
+
+        btn.innerHTML = originalIcon;
+        btn.disabled = false;
+
+        let cleanedPhone = String(order.ws || order.phone).replace(/\D/g, '');
+        if (cleanedPhone.length === 10) cleanedPhone = '1' + cleanedPhone;
+
+        const url = `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(mensaje.trim())}`;
+        window.open(url, '_blank');
+      };
+
+      // FEATURE IA: Extracción Mágica del Chat
+      const magicPasteAI = async () => {
+        const rawText = document.getElementById('magic-paste-text').value.trim();
+        if(!rawText) return showToast('Pega el texto del cliente primero.', 'warning');
+
+        const btn = document.getElementById('btn-magic-paste');
+        btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i>`;
+        lucide.createIcons();
+        btn.disabled = true;
+
+        const prompt = `Analiza el siguiente mensaje de un cliente de República Dominicana y extrae los datos para un pedido de entrega.
+        Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta (usa strings vacíos o 0 si no encuentras algo):
+        {"name": "Nombre", "phone": "Telefono", "city": "Ciudad o Sector", "address": "Direccion detallada", "product": "Producto mencionado", "amount": 0}
+        No incluyas markdown ni ningún otro texto adicional, solo el JSON.
+        Mensaje del cliente: "${rawText}"`;
+
+        const fallback = '{"name":"","phone":"","city":"","address":"","product":"","amount":0}';
+
+        try {
+          const aiResponse = await GeminiAPI.callLLM(prompt, fallback);
+          const cleanJsonStr = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+          const data = JSON.parse(cleanJsonStr);
+
+          if(data.name) document.getElementById('new-name').value = data.name;
+          if(data.phone) document.getElementById('new-phone').value = data.phone.replace(/\D/g, '');
+          if(data.city) document.getElementById('new-city').value = data.city;
+          if(data.address) document.getElementById('new-address').value = data.address;
+          if(data.product) document.getElementById('new-product').value = data.product;
+          if(data.amount) document.getElementById('new-amount').value = data.amount;
+
+          if(aiResponse === fallback) {
+             showToast('La IA está en modo offline. Llena el formulario manualmente.', 'warning');
+          } else {
+             showToast('Formulario autocompletado con IA ✨', 'success');
+          }
+        } catch(e) {
+          console.error(e);
+          showToast('No se pudo extraer la información del texto.', 'error');
+        }
+        
+        btn.innerHTML = `✨ Llenar`;
+        btn.disabled = false;
+        lucide.createIcons();
+      };
+
       // FEATURE IA: Analizador de Ruta General
       const analyzeRouteWithAI = async () => {
         const pending = orders.filter(o => !o.status.includes('Entregado') && !o.status.includes('Cancelado') && !o.status.includes('Devolución'));
@@ -1275,7 +1364,10 @@
           return;
         }
 
-        tbody.innerHTML = filtered.map(o => `
+        tbody.innerHTML = filtered.map(o => {
+          const isCanceled = o.status.toLowerCase().includes('cancelado') || o.status.toLowerCase().includes('devolución');
+          
+          return `
           <tr class="${selectedIds.has(o.id) ? 'selected' : ''}">
             <td style="text-align:center;">
               <input type="checkbox" class="checkbox-custom row-check" data-id="${o.id}" ${selectedIds.has(o.id)?'checked':''} onchange="DashboardManager.toggleSelection('${o.id}', this.checked)">
@@ -1309,10 +1401,13 @@
             </td>
             <td style="text-align:center; display:flex; justify-content:center; gap:6px;">
               <a href="https://wa.me/${o.ws}" target="_blank" class="whatsapp-btn" title="WhatsApp Básico"><i data-lucide="message-circle" style="width:16px;height:16px;"></i></a>
-              <button onclick="DashboardManager.generateSmartWA('${o.id}')" class="whatsapp-btn smart-wa-btn" id="wa-btn-${o.id}" title="✨ Crear mensaje Inteligente" style="font-size:12px;">✨ IA</button>
+              ${!isCanceled 
+                ? `<button onclick="DashboardManager.generateSmartWA('${o.id}')" class="whatsapp-btn smart-wa-btn" id="wa-btn-${o.id}" title="✨ Crear mensaje Inteligente" style="font-size:12px; font-weight:bold;">✨ IA</button>`
+                : `<button onclick="DashboardManager.generateWinBackWA('${o.id}')" class="whatsapp-btn" style="background:#FEE2E2; color:#991B1B; font-size:12px; font-weight:bold; border:1px solid #FCA5A5;" id="wa-winback-${o.id}" title="✨ Mensaje para recuperar venta">✨ Recuperar</button>`
+              }
             </td>
           </tr>
-        `).join('');
+        `}).join('');
         lucide.createIcons();
         updateSelectedUI();
       };
@@ -1499,6 +1594,7 @@
         
         document.getElementById('new-order-modal').style.display = 'none';
         document.getElementById('new-order-form').reset();
+        document.getElementById('magic-paste-text').value = '';
         showToast(`Pedido ${id} creado exitosamente`, 'success');
       };
 
@@ -1519,7 +1615,7 @@
 
       document.addEventListener('DOMContentLoaded', () => { load(); renderStats(); renderTable(); });
 
-      return { importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, analyzeRouteWithAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus, configureAI };
+      return { importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, generateWinBackWA, analyzeRouteWithAI, magicPasteAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus, configureAI };
     })();
   </script>
 </body>
