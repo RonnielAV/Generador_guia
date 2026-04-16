@@ -637,16 +637,19 @@
 
       const callLLM = async (promptText, fallbackText = "Respuesta de IA no disponible temporalmente.") => {
         const localKey = getLocalKey();
-        const finalKey = apiKey || localKey;
+        const isLocalMode = !!localKey;
+        
+        const finalKey = isLocalMode ? localKey : apiKey;
 
-        if (!finalKey) {
+        // PREVENCIÓN DEL ERROR 404: El modelo "preview" solo funciona en esta plataforma web.
+        // Si pusiste tu propia API Key, usamos el modelo público "1.5-flash" para que funcione en tu PC.
+        const modelName = isLocalMode ? "gemini-1.5-flash" : "gemini-2.5-flash-preview-09-2025";
+
+        if (isLocalMode && !finalKey) {
           console.warn("Modo Local: No se detectó API Key. Usando respuestas automáticas de respaldo.");
           return fallbackText;
         }
 
-        // Si es una llave configurada manualmente, usamos un modelo público universal.
-        // Si es la llave automática de Google, usamos el modelo de preview.
-        const modelName = (finalKey === apiKey) ? "gemini-2.5-flash-preview-09-2025" : "gemini-1.5-flash";
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${finalKey}`;
         
         const payload = { contents: [{ parts: [{ text: promptText }] }] };
@@ -660,7 +663,7 @@
               body: JSON.stringify(payload)
             });
             
-            // 403 (Forbidden) o 404 (Not Found): No hay permisos o el modelo no es soportado por esa llave.
+            // 403 o 404: Sin permisos o modelo incorrecto.
             if (response.status === 403 || response.status === 404) {
               console.warn(`API Error ${response.status}. Llave inválida o sin permisos para el modelo. Usando respaldo.`);
               return fallbackText;
