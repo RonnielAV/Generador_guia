@@ -199,7 +199,7 @@
     @keyframes spin { 100% { transform: rotate(360deg); } }
     .spin { animation: spin 1s linear infinite; }
 
-    /* Modales IA */
+    /* Modales IA y Formularios */
     .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items:center; justify-content:center; backdrop-filter: blur(2px); }
     .modal-content { background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 650px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; }
@@ -209,6 +209,7 @@
     .modal-body li { margin-bottom: 6px; }
     .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: 4px;}
     .modal-close:hover { background: var(--background); color: var(--text-main); }
+    .checkbox-custom { width: 16px; height: 16px; cursor: pointer; }
   </style>
 </head>
 
@@ -380,16 +381,28 @@
 
     <!-- Toolbar -->
     <div class="dash-toolbar">
-      <div class="search-box">
-        <i data-lucide="search"></i>
-        <input type="text" id="dash-search" placeholder="Buscar por ID, Cliente o Ciudad..." onkeyup="DashboardManager.filterTable()">
-      </div>
-      <div class="filter-tabs" id="dash-filters">
-        <button class="filter-btn active" onclick="DashboardManager.setFilter('Todos', this)">Todos</button>
-        <button class="filter-btn" onclick="DashboardManager.setFilter('En Proceso', this)">En Proceso</button>
-        <button class="filter-btn" onclick="DashboardManager.setFilter('Para mañana', this)">Para mañana</button>
-        <button class="filter-btn" onclick="DashboardManager.setFilter('Entregado', this)">Entregados</button>
-        <button class="filter-btn" onclick="DashboardManager.setFilter('Cancelado', this)">Cancelados</button>
+      <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center;">
+          <div class="search-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="dash-search" placeholder="Buscar por ID, Cliente o Ciudad..." onkeyup="DashboardManager.filterTable()">
+          </div>
+          <div class="filter-tabs" id="dash-filters">
+            <button class="filter-btn active" onclick="DashboardManager.setFilter('Todos', this)">Todos</button>
+            <button class="filter-btn" onclick="DashboardManager.setFilter('En Proceso', this)">En Proceso</button>
+            <button class="filter-btn" onclick="DashboardManager.setFilter('Para mañana', this)">Para mañana</button>
+            <button class="filter-btn" onclick="DashboardManager.setFilter('Entregado', this)">Entregados</button>
+            <button class="filter-btn" onclick="DashboardManager.setFilter('Cancelado', this)">Cancelados</button>
+          </div>
+        </div>
+        <!-- Filtro por Rango de Fechas -->
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--border); padding-top: 12px;">
+          <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);"><i data-lucide="calendar" style="width:14px; height:14px; display:inline; margin-right:4px;"></i> Fecha de Entrega:</span>
+          <input type="date" id="filter-date-from" onchange="DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
+          <span style="color: var(--text-muted); font-size: 0.8rem;">hasta</span>
+          <input type="date" id="filter-date-to" onchange="DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
+          <button onclick="DashboardManager.clearDateFilters()" class="filter-btn" style="font-size: 0.75rem; padding: 6px 10px; background: #E5E7EB;">Limpiar Fechas</button>
+        </div>
       </div>
     </div>
 
@@ -402,7 +415,8 @@
               <input type="checkbox" id="check-all" class="checkbox-custom" onchange="DashboardManager.toggleAll(this.checked)">
             </th>
             <th>Pedido</th>
-            <th>Fecha</th>
+            <th>F. Pedido</th>
+            <th>F. Entrega</th>
             <th>Cliente & Dirección</th>
             <th>Monto</th>
             <th style="width: 200px;">Estado</th>
@@ -411,7 +425,7 @@
         </thead>
         <tbody id="dash-table-body">
           <!-- Llenado por JS -->
-          <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6B7280;">Sube tu archivo Excel (.csv) para comenzar.</td></tr>
+          <tr><td colspan="8" style="text-align: center; padding: 40px; color: #6B7280;">Sube tu archivo Excel (.csv) para comenzar.</td></tr>
         </tbody>
       </table>
     </div>
@@ -952,6 +966,10 @@
       let rate = 300;
       let currentFilter = 'Todos';
       let currentSearch = '';
+      
+      // Filtros de fecha
+      let filterDateFrom = '';
+      let filterDateTo = '';
 
       // --- Función local para estimar costo de envío por localidad ---
       const calculateCourierCostLocal = (city, address, baseRate) => {
@@ -1022,11 +1040,23 @@
 
       const updateRate = (val) => { rate = Number(val) || 0; save(); renderStats(); renderTable(); };
 
+      const clearDateFilters = () => {
+        document.getElementById('filter-date-from').value = '';
+        document.getElementById('filter-date-to').value = '';
+        filterTable();
+      };
+
       const getFilteredOrders = () => {
         return orders.filter(o => {
           const mSearch = o.name.toLowerCase().includes(currentSearch) || o.id.toLowerCase().includes(currentSearch) || o.city.toLowerCase().includes(currentSearch);
           const mStatus = currentFilter === 'Todos' || o.status.includes(currentFilter) || (currentFilter === 'Cancelado' && o.status.includes('Devolución'));
-          return mSearch && mStatus;
+          
+          let mDate = true;
+          const targetDate = o.deliveryDate || o.date; // Usa la fecha de entrega si existe, si no usa la de creación
+          if (filterDateFrom && targetDate < filterDateFrom) mDate = false;
+          if (filterDateTo && targetDate > filterDateTo) mDate = false;
+
+          return mSearch && mStatus && mDate;
         });
       };
 
@@ -1037,7 +1067,12 @@
         renderTable();
       };
 
-      const filterTable = () => { currentSearch = document.getElementById('dash-search').value.toLowerCase(); renderTable(); };
+      const filterTable = () => { 
+        currentSearch = document.getElementById('dash-search').value.toLowerCase(); 
+        filterDateFrom = document.getElementById('filter-date-from').value;
+        filterDateTo = document.getElementById('filter-date-to').value;
+        renderTable(); 
+      };
 
       const toggleSelection = (id, isChecked) => {
         if (isChecked) selectedIds.add(id); else selectedIds.delete(id);
@@ -1076,9 +1111,38 @@
         });
       };
 
+      const updateDeliveryDate = (id, newDate) => {
+        const order = orders.find(o => o.id === id);
+        if (order) { 
+          order.deliveryDate = newDate; 
+          save(); 
+          showToast('Fecha de entrega actualizada', 'success');
+        }
+      };
+
       const updateStatus = (id, newStatus) => {
         const order = orders.find(o => o.id === id);
-        if (order) { order.status = newStatus; save(); renderStats(); renderTable(); }
+        if (order) { 
+          order.status = newStatus; 
+
+          // Lógica de "Para mañana" automática
+          if (newStatus === 'Para mañana') {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            order.deliveryDate = tomorrow.toISOString().split('T')[0];
+            showToast('Reprogramado para mañana automáticamente.', 'info');
+          } else if (newStatus === 'Entrega para otro día') {
+            showToast('Elige la fecha haciendo clic en la columna "F. Entrega".', 'warning');
+            setTimeout(() => {
+              const dateInput = document.querySelector(`.delivery-date-input[data-id="${id}"]`);
+              if (dateInput) { dateInput.focus(); dateInput.showPicker && dateInput.showPicker(); }
+            }, 300);
+          }
+
+          save(); 
+          renderStats(); 
+          renderTable(); 
+        }
       };
 
       const renderStats = () => {
@@ -1172,7 +1236,7 @@
         const filtered = getFilteredOrders();
         
         if (filtered.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px; color:#6B7280;">No se encontraron pedidos.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:40px; color:#6B7280;">No se encontraron pedidos en este rango.</td></tr>`;
           return;
         }
 
@@ -1182,7 +1246,10 @@
               <input type="checkbox" class="checkbox-custom row-check" data-id="${o.id}" ${selectedIds.has(o.id)?'checked':''} onchange="DashboardManager.toggleSelection('${o.id}', this.checked)">
             </td>
             <td><strong style="color:var(--primary); font-size:0.9rem;">${o.id}</strong></td>
-            <td style="font-size:0.85rem; color:var(--text-muted); white-space:nowrap;">${o.date || ''}</td>
+            <td style="font-size:0.8rem; color:var(--text-muted); white-space:nowrap;">${o.date || ''}</td>
+            <td>
+              <input type="date" data-id="${o.id}" class="delivery-date-input" value="${o.deliveryDate || ''}" onchange="DashboardManager.updateDeliveryDate('${o.id}', this.value)" style="border:1px solid transparent; background:transparent; font-size:0.8rem; color:var(--text-main); font-weight: 600; font-family:inherit; cursor:pointer; border-radius: 4px; padding: 2px;">
+            </td>
             <td>
               <div style="font-weight:700; color:var(--text-main); margin-bottom:2px;">${o.name} <span style="font-weight:400; color:#6B7280; font-size:0.75rem;">(${o.phone})</span></div>
               <div style="font-size:0.75rem; color:var(--text-muted); max-width:250px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${o.city} - ${o.address}">${o.city} • ${o.address}</div>
@@ -1224,39 +1291,72 @@
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
 
+          // Función mejorada para limpiar los nombres de las columnas, incluyendo caracteres ocultos de Excel
+          const normalizeDashKey = (key) => String(key).replace(/^\uFEFF/, '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, '_');
+
           const newOrders = rows.map((row, idx) => {
-            const cRow = {}; for (let k in row) cRow[ShippingGuideManager.normalizeKey ? ShippingGuideManager.normalizeKey(k) : k.toLowerCase().replace(/\s+/g, '_')] = row[k];
+            const cRow = {}; 
+            for (let k in row) cRow[normalizeDashKey(k)] = row[k];
             
-            const id = cRow['pedido'] || `PED-${Math.floor(Math.random()*10000)}`;
-            const rawMonto = cRow['valor_recaudo'] || cRow['amount'] || cRow['recaudo'] || '0';
+            const id = cRow['pedido'] || cRow['id'] || `PED-${Math.floor(Math.random()*10000)}`;
+            const rawMonto = cRow['valor_recaudo'] || cRow['amount'] || cRow['recaudo'] || cRow['monto'] || '0';
             const numMonto = parseFloat(String(rawMonto).replace(/[^0-9.]/g, '')) || 0;
             let ws = cRow['link_ws'] || cRow['whatsapp'] || cRow['telefono'] || '';
             ws = String(ws).replace('wa.me/', '').replace(/[^0-9]/g, '');
             
-            let parsedDate = String(cRow['fecha'] || cRow['date'] || cRow['date_text'] || new Date().toISOString().split('T')[0]).trim();
+            let parsedDate = String(cRow['fecha_creacion'] || cRow['fecha'] || cRow['date'] || cRow['date_text'] || new Date().toISOString().split('T')[0]).trim();
+            let deliveryDate = String(cRow['fecha_entrega'] || cRow['delivery_date'] || '').trim();
 
             return {
               id: String(id).trim(),
               date: parsedDate,
-              name: String(cRow['destinatario'] || cRow['nombre'] || 'Sin Nombre').trim(),
+              deliveryDate: deliveryDate,
+              name: String(cRow['destinatario'] || cRow['nombre'] || cRow['cliente'] || 'Sin Nombre').trim(),
               phone: String(cRow['telefono'] || cRow['celular'] || '').trim(),
               address: String(cRow['direccion'] || cRow['calle'] || '').trim(),
               city: String(cRow['ciudad'] || cRow['municipio'] || '').trim(),
-              product: String(cRow['productos'] || cRow['contenido'] || '').trim(),
+              product: String(cRow['productos'] || cRow['contenido'] || cRow['articulo'] || '').trim(),
               amountStr: rawMonto ? (String(rawMonto).includes('RD$') ? rawMonto : `RD$ ${numMonto}`) : 'RD$ 0',
               numericAmount: numMonto,
               status: String(cRow['estado'] || cRow['status'] || 'En Proceso').trim(),
               ws: ws,
-              notes: String(cRow['notas'] || cRow['nota'] || '').trim()
+              notes: String(cRow['notas'] || cRow['nota'] || cRow['comentario'] || '').trim(),
+              aiCalculated: false
             };
           });
 
-          const existingIds = new Set(orders.map(o => o.id));
-          const filteredNew = newOrders.filter(o => !existingIds.has(o.id) && o.name !== 'Sin Nombre');
+          let added = 0;
+          let updated = 0;
+          const existingMap = new Map(orders.map(o => [o.id, o]));
+
+          newOrders.forEach(o => {
+            if (o.name === 'Sin Nombre') return; // Saltar filas vacías
+            
+            if (existingMap.has(o.id)) {
+              // Si el ID ya existe, actualizar el registro
+              const existing = existingMap.get(o.id);
+              existing.name = o.name;
+              existing.phone = o.phone;
+              existing.address = o.address;
+              existing.city = o.city;
+              existing.product = o.product;
+              existing.numericAmount = o.numericAmount;
+              existing.amountStr = o.amountStr;
+              existing.status = o.status;
+              existing.ws = o.ws;
+              existing.notes = o.notes;
+              if (o.date && o.date !== new Date().toISOString().split('T')[0]) existing.date = o.date;
+              if (o.deliveryDate) existing.deliveryDate = o.deliveryDate;
+              updated++;
+            } else {
+              // Si el ID es nuevo, agregarlo a la lista
+              orders.push(o);
+              added++;
+            }
+          });
           
-          orders = [...filteredNew, ...orders];
           save(); renderStats(); renderTable();
-          showToast(`Se cargaron ${filteredNew.length} pedidos.`, "success");
+          showToast(`Importación lista: ${added} agregados, ${updated} actualizados.`, "success");
         } catch (e) { showToast("Error leyendo el archivo.", "error"); console.error(e); }
         event.target.value = '';
       };
@@ -1264,7 +1364,7 @@
       const exportExcel = () => {
         if (!orders.length) return showToast("No hay datos para exportar.", "warning");
         const expRows = orders.map(o => ({
-          'Pedido': o.id, 'Fecha': o.date || '', 'Destinatario': o.name, 'Telefono': o.phone, 'Direccion': o.address,
+          'Pedido': o.id, 'Fecha Creacion': o.date || '', 'Fecha Entrega': o.deliveryDate || '', 'Destinatario': o.name, 'Telefono': o.phone, 'Direccion': o.address,
           'Ciudad': o.city, 'Productos': o.product, 'Valor Recaudo': o.numericAmount,
           'Estado': o.status, 'Notas': o.notes, 'Link WS': o.ws ? `wa.me/${o.ws}` : ''
         }));
@@ -1307,9 +1407,14 @@
       const bulkUpdateStatus = (newStatus) => {
         if(confirm(`¿Estás seguro de que deseas cambiar el estado a "${newStatus}" para ${selectedIds.size} pedido(s)?`)) {
           let updatedCount = 0;
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
           orders.forEach(o => {
             if(selectedIds.has(o.id)) {
               o.status = newStatus;
+              if (newStatus === 'Para mañana') o.deliveryDate = tomorrowStr;
               updatedCount++;
             }
           });
@@ -1338,6 +1443,7 @@
         const newOrder = {
           id,
           date: dateVal || new Date().toISOString().split('T')[0],
+          deliveryDate: '',
           name,
           phone,
           address,
@@ -1363,7 +1469,7 @@
 
       document.addEventListener('DOMContentLoaded', () => { load(); renderStats(); renderTable(); });
 
-      return { importExcel, exportExcel, renderTable, setFilter, filterTable, toggleSelection, toggleAll, updateStatus, updateRate, sendToGenerator, generateSmartWA, analyzeRouteWithAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus };
+      return { importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, analyzeRouteWithAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus };
     })();
   </script>
 </body>
