@@ -332,7 +332,7 @@
           <option value="">Cambiar Estado...</option>
           <option value="En Proceso">En Proceso</option>
           <option value="Entregado">Entregado</option>
-          <option value="Para mañana">Para mañana</option>
+          <option value="Pendiente">Pendiente</option>
           <option value="Entrega para otro día">Para otro día</option>
           <option value="Cancelado (Devolución)">Cancelado</option>
         </select>
@@ -390,7 +390,7 @@
           <div class="filter-tabs" id="dash-filters">
             <button class="filter-btn active" onclick="DashboardManager.setFilter('Todos', this)">Todos</button>
             <button class="filter-btn" onclick="DashboardManager.setFilter('En Proceso', this)">En Proceso</button>
-            <button class="filter-btn" onclick="DashboardManager.setFilter('Pendiente', this)">Pendiente</button>
+            <button class="filter-btn" onclick="DashboardManager.setFilter('Pendiente', this)">Pendientes</button>
             <button class="filter-btn" onclick="DashboardManager.setFilter('Entregado', this)">Entregados</button>
             <button class="filter-btn" onclick="DashboardManager.setFilter('Cancelado', this)">Cancelados</button>
           </div>
@@ -1125,8 +1125,8 @@
         if (order) { 
           order.status = newStatus; 
 
-          // Lógica de "Para mañana" automática
-          if (newStatus === 'Para mañana') {
+          // Lógica automática para Pendiente (al día siguiente)
+          if (newStatus === 'Pendiente') {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             order.deliveryDate = tomorrow.toISOString().split('T')[0];
@@ -1263,10 +1263,10 @@
             </td>
             <td>
               <select class="status-select" onchange="DashboardManager.updateStatus('${o.id}', this.value)">
-                ${!['En Proceso', 'Entregado', 'Para mañana', 'Cancelado (Devolución)', 'Entrega para otro día'].includes(o.status) ? `<option value="${o.status}">${o.status}</option>` : ''}
+                ${!['En Proceso', 'Entregado', 'Pendiente', 'Cancelado (Devolución)', 'Entrega para otro día'].includes(o.status) ? `<option value="${o.status}">${o.status}</option>` : ''}
                 <option value="En Proceso" ${o.status==='En Proceso'?'selected':''}>En Proceso</option>
                 <option value="Entregado" ${o.status==='Entregado'?'selected':''}>Entregado</option>
-                <option value="Para mañana" ${o.status==='Para mañana'?'selected':''}>Para mañana</option>
+                <option value="Pendiente" ${o.status==='Pendiente'?'selected':''}>Pendiente</option>
                 <option value="Entrega para otro día" ${o.status==='Entrega para otro día'?'selected':''}>Para otro día</option>
                 <option value="Cancelado (Devolución)" ${o.status==='Cancelado (Devolución)'?'selected':''}>Cancelado</option>
               </select><br>
@@ -1414,7 +1414,7 @@
           orders.forEach(o => {
             if(selectedIds.has(o.id)) {
               o.status = newStatus;
-              if (newStatus === 'Para mañana') o.deliveryDate = tomorrowStr;
+              if (newStatus === 'Pendiente') o.deliveryDate = tomorrowStr;
               updatedCount++;
             }
           });
