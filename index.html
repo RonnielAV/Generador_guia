@@ -94,9 +94,10 @@
     .single { padding: 8px; border-bottom: 2px solid black; }
     .single:last-child { border-bottom: none; }
     .flex-line { display: flex; justify-content: space-between; align-items: center; }
-    .guide-qr-section { display: flex; justify-content: space-between; align-items: center; }
-    .guide-number { font-size: 44px; font-weight: 900; letter-spacing: 1px; margin-top: 8px; }
-    .qr-image { width: 260px; height: 260px; border: 3px solid #000; padding: 2px; background: #fff; image-rendering: pixelated; image-rendering: crisp-edges; }
+    .guide-qr-section { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .guide-qr-meta, .guide-qr-section > div:first-child { flex: 1 1 0; min-width: 0; }
+    .guide-number { font-size: clamp(26px, 4vw, 36px); font-weight: 900; letter-spacing: 0.5px; margin-top: 8px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qr-image { width: min(220px, 45%); height: auto; aspect-ratio: 1 / 1; max-width: 45%; flex: 0 0 auto; border: 3px solid #000; padding: 2px; background: #fff; image-rendering: pixelated; image-rendering: crisp-edges; }
     .date-box { border: 1px solid black; padding: 2px 6px; display: inline-block; font-weight: bold; }
     .note { font-size: 11px; font-style: italic; white-space: pre-wrap; }
     .open-note { text-align: center; font-weight: bold; font-size: 14px; }
@@ -139,7 +140,7 @@
       .body-text { font-size: 12px; line-height: 1.2; }
       .small-text { font-size: 10px; line-height: 1.15; }
       .guide-number { font-size: 34px; margin-top: 4px; }
-      .qr-image { width: 1.8in; height: 1.8in; border-width: 2px; }
+      .qr-image { width: 1.8in; height: 1.8in; max-width: none; border-width: 2px; }
       .date-box { padding: 1px 5px; }
       .note { font-size: 10px; line-height: 1.15; }
       .open-note { font-size: 12px; }
