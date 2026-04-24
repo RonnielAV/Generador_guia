@@ -79,6 +79,7 @@
     .preview-limit-notice { background: #E0E7FF; color: #3730A3; padding: 12px 24px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-align: center; margin-top: 16px; width: 100%; max-width: 450px; display: none; }
 
     /* --- DISEÑO DE LA GUÍA --- */
+    .sheet-wrap { display:flex; flex-direction:column; align-items:center; width:100%; margin-bottom:16px; }
     .sheet { background: white; width: 100%; max-width: 450px; border: 2px solid black; padding: 10px; font-family: Arial, sans-serif; color: black; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15); border-radius: 2px; }
     .label-brand { text-align: center; border-bottom: 2px solid black; padding-bottom: 5px; margin-bottom: 5px; }
     .brand { font-size: 24px; font-weight: 900; letter-spacing: 2px; }
@@ -129,7 +130,20 @@
       .print-only { display: block; }
       .app-container { display: block; padding: 0; }
       .preview-panel { background: transparent; padding: 0; display: block; }
-      .sheet { width: 100%; max-width: none; max-height: none; border: none; margin: 0; padding: 1mm; box-shadow: none; page-break-after: always; page-break-inside: avoid; box-sizing: border-box; }
+      .sheet-wrap { width: 4in; height: 6in; margin: 0; page-break-after: always; page-break-inside: avoid; break-inside: avoid; display: flex; justify-content: flex-start; }
+      .sheet { width: 4in; height: 6in; max-width: none; border: 1px solid black; margin: 0; padding: 0.08in; box-shadow: none; box-sizing: border-box; overflow: hidden; }
+      .label-brand { padding-bottom: 0.04in; margin-bottom: 0.04in; }
+      .brand { font-size: 20px; }
+      .cell, .single { padding: 6px; }
+      .head { font-size: 8px; margin-bottom: 3px; }
+      .body-text { font-size: 12px; line-height: 1.2; }
+      .small-text { font-size: 10px; line-height: 1.15; }
+      .guide-number { font-size: 34px; margin-top: 4px; }
+      .qr-image { width: 1.8in; height: 1.8in; border-width: 2px; }
+      .date-box { padding: 1px 5px; }
+      .note { font-size: 10px; line-height: 1.15; }
+      .open-note { font-size: 12px; }
+      .footer { margin-top: 3px; font-size: 8px; }
     }
 
     /* =========================================================================
@@ -914,7 +928,7 @@
         const qrImageURI = generateQRImage(data);
         const controlsStr = !isManualPreview ? `<div class="no-print" style="width: 100%; max-width: 450px; display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 8px;"><button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem;" onclick="ShippingGuideManager.editGuide(${index})">Editar</button><button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.75rem;" onclick="ShippingGuideManager.deleteGuide(${index})">Eliminar</button></div>` : '';
         return `
-          <div style="display:flex; flex-direction:column; align-items:center; width:100%; margin-bottom:16px;">
+          <div class="sheet-wrap">
             ${controlsStr}
             <div class="sheet">
               <div class="label-brand"><div class="brand" style="color: var(--primary);">MARKETUP</div></div>
