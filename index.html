@@ -13,6 +13,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     /* =========================================================================
@@ -231,6 +232,16 @@
     .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 4px; border-radius: 4px;}
     .modal-close:hover { background: var(--background); color: var(--text-main); }
     .checkbox-custom { width: 16px; height: 16px; cursor: pointer; }
+    .tiny-btn { display:inline-flex; align-items:center; gap:4px; padding:6px 8px; border-radius:8px; border:none; cursor:pointer; font-size:0.72rem; font-weight:700; text-decoration:none; }
+    .tiny-btn.route { background:#FEF3C7; color:#92400E; }
+    .tiny-btn.form { background:#E0F2FE; color:#075985; }
+    .tiny-btn.doc { background:#EEF2FF; color:#4338CA; }
+    .postsale-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px; font-size:0.7rem; font-weight:700; margin-top:6px; margin-right:4px; }
+    .postsale-chip.change { background:#E0E7FF; color:#3730A3; }
+    .postsale-chip.return { background:#FEE2E2; color:#991B1B; }
+    .postsale-chip.route { background:#FEF3C7; color:#92400E; }
+    .info-card { background:#F8FAFC; border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px; }
+    .info-card h4 { font-size:0.9rem; margin-bottom:6px; }
   </style>
 </head>
 
@@ -269,13 +280,13 @@
             </label>
             <div style="display:flex; gap:8px;">
               <textarea id="magic-paste-text" rows="2" placeholder="Ej: Hola, mándame un Smart Ring a la Calle Sol #2, Herrera. Soy María 809-555-1234." style="flex:1; border-color: #D8B4FE; font-size: 0.8rem; min-height: 50px;"></textarea>
-              <button type="button" class="btn ai-btn" onclick="DashboardManager.magicPasteAI()" id="btn-magic-paste" style="align-self: stretch; padding: 0 16px;">✨ Llenar</button>
+              <button type="button" class="btn ai-btn" onclick="window.DashboardManager.magicPasteAI()" id="btn-magic-paste" style="align-self: stretch; padding: 0 16px;">✨ Llenar</button>
             </div>
             <p style="font-size: 0.7rem; color: #9333EA; margin-top: 6px; line-height: 1.2;">Pega el mensaje desordenado del cliente y la IA llenará el formulario de abajo automáticamente.</p>
         </div>
         <hr style="border-top: 1px solid var(--border); margin-bottom: 16px;">
 
-        <form id="new-order-form" onsubmit="DashboardManager.saveNewOrder(event)">
+        <form id="new-order-form" onsubmit="window.DashboardManager.saveNewOrder(event)">
           <input type="hidden" id="edit-order-id" value="">
           <div class="form-row">
             <div class="form-group">
@@ -320,6 +331,96 @@
     </div>
   </div>
 
+  <!-- MODAL DE CAMBIOS Y DEVOLUCIONES -->
+  <div id="postsale-modal" class="modal-overlay no-print">
+    <div class="modal-content" style="max-width: 760px;">
+      <div class="modal-header">
+        <h3 style="color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="refresh-ccw" style="color: #D97706;"></i> <span id="postsale-title-text">Gestionar cambio / devolución</span>
+        </h3>
+        <button class="modal-close" onclick="document.getElementById('postsale-modal').style.display='none'"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="info-card">
+          <h4>Formulario externo de cambios y devoluciones</h4>
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">Usa el formulario oficial para que el cliente registre su caso y luego gestiona la ruta desde este panel.</p>
+          <div class="btn-group" style="margin-bottom:0;">
+            <button type="button" class="btn btn-outline" onclick="window.DashboardManager.openReturnFormFromModal()">
+              <i data-lucide="external-link"></i> Abrir formulario
+            </button>
+            <button type="button" class="btn btn-outline" onclick="window.DashboardManager.copyReturnFormLink()">
+              <i data-lucide="copy"></i> Copiar link
+            </button>
+          </div>
+        </div>
+
+        <form id="postsale-form" onsubmit="window.DashboardManager.savePostSaleCase(event)">
+          <input type="hidden" id="postsale-order-id" value="">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tipo de caso</label>
+              <select id="postsale-type">
+                <option value="">Sin postventa activa</option>
+                <option value="change">Cambio</option>
+                <option value="return">Devolución</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Estado del caso</label>
+              <select id="postsale-status">
+                <option value="">Sin estado</option>
+                <option value="Solicitud de cambio recibida">Solicitud de cambio recibida</option>
+                <option value="Solicitud de devolución recibida">Solicitud de devolución recibida</option>
+                <option value="Pendiente de recoger">Pendiente de recoger</option>
+                <option value="Producto recogido">Producto recogido</option>
+                <option value="Cambio en ruta">Cambio en ruta</option>
+                <option value="Devolución en revisión">Devolución en revisión</option>
+                <option value="Cambio completado">Cambio completado</option>
+                <option value="Devolución completada">Devolución completada</option>
+                <option value="Reembolso pendiente">Reembolso pendiente</option>
+                <option value="Caso cerrado">Caso cerrado</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Cómo se resolverá</label>
+              <input type="text" id="postsale-resolution" placeholder="Ej: Cambio por talla 8 / devolución del dinero">
+            </div>
+            <div class="form-group">
+              <label>Acción de ruta</label>
+              <select id="postsale-route-action">
+                <option value="">Sin ruta pendiente</option>
+                <option value="Recoger cambio">Recoger cambio</option>
+                <option value="Recoger devolución">Recoger devolución</option>
+                <option value="Entregar cambio">Entregar cambio</option>
+                <option value="Cambio y recogida en la misma visita">Cambio y recogida en la misma visita</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Link del formulario enviado</label>
+              <input type="url" id="postsale-form-url" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label>PDF o documento del caso</label>
+              <input type="text" id="postsale-pdf-url" placeholder="Ruta local o URL del PDF">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notas del caso</label>
+            <textarea id="postsale-notes" rows="3" placeholder="Motivo, talla/color correcto, observaciones del cliente, instrucciones al mensajero..."></textarea>
+          </div>
+          <div class="btn-group" style="margin-top: 16px; justify-content: flex-end; margin-bottom: 0;">
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('postsale-modal').style.display='none'">Cancelar</button>
+            <button type="submit" class="btn btn-secondary">Guardar caso</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- NAVEGACIÓN SUPERIOR -->
   <nav class="top-nav no-print">
     <div class="nav-brand">
@@ -349,40 +450,50 @@
         <p style="color: var(--text-muted); font-size: 0.95rem;">Gestiona tus archivos Excel, estados y costos.</p>
       </div>
       <div class="btn-group" style="margin-bottom: 0;">
-        <button onclick="DashboardManager.openNewOrderModal()" class="btn btn-secondary" style="padding: 10px 16px; font-size: 0.9rem;">
+        <button onclick="window.DashboardManager.openNewOrderModal()" class="btn btn-secondary" style="padding: 10px 16px; font-size: 0.9rem;">
           <i data-lucide="plus"></i> Nuevo Pedido
         </button>
-        <button onclick="DashboardManager.analyzeRouteWithAI()" class="btn ai-btn" style="padding: 10px 16px; font-size: 0.9rem;" id="btn-ai-route">
+        <button onclick="window.DashboardManager.analyzeRouteWithAI()" class="btn ai-btn" style="padding: 10px 16px; font-size: 0.9rem;" id="btn-ai-route">
           ✨ Analizar Ruta Pendiente
         </button>
-        <button onclick="DashboardManager.configureAI()" class="btn btn-outline" style="padding: 10px 16px; font-size: 0.9rem;" title="Configurar IA (Solo para uso local)">
+        <button onclick="window.DashboardManager.openPostSaleQueue()" class="btn btn-outline" style="padding: 10px 16px; font-size: 0.9rem; background: #FFF7ED; color: #C2410C; border-color: #FDBA74;" title="Ver casos de cambios y devoluciones abiertos">
+          <i data-lucide="refresh-ccw"></i> Postventa
+        </button>
+        <button onclick="window.DashboardManager.configureAI()" class="btn btn-outline" style="padding: 10px 16px; font-size: 0.9rem;" title="Configurar IA (Solo para uso local)">
           <i data-lucide="settings"></i> Config IA
         </button>
-        <button onclick="DashboardManager.clearAllDashboard()" class="btn btn-outline" style="background: #FEF2F2; color: var(--danger); border-color: #FCA5A5;" title="Vaciar todo el panel">
+        <button onclick="window.DashboardManager.clearAllDashboard()" class="btn btn-outline" style="background: #FEF2F2; color: var(--danger); border-color: #FCA5A5;" title="Vaciar todo el panel">
           <i data-lucide="trash-2"></i> Vaciar Todo
         </button>
         <div class="btn btn-outline btn-file" style="background: white;">
           <i data-lucide="upload"></i> Importar Excel
-          <input type="file" id="dashFileInput" accept=".csv" onchange="DashboardManager.importExcel(event)">
+          <input type="file" id="dashFileInput" accept=".csv" onchange="window.DashboardManager.importExcel(event)">
         </div>
-        <button onclick="DashboardManager.exportExcel()" class="btn btn-outline" style="background: white;">
+        <button onclick="window.DashboardManager.exportExcel()" class="btn btn-outline" style="background: white;">
           <i data-lucide="download"></i> Exportar
         </button>
 
         <!-- Selector de cambio de estado masivo -->
-        <select id="bulk-status-select" class="btn btn-outline" style="background: white; display: none; cursor: pointer; padding: 10px 16px; font-size: 0.85rem; border-color: var(--primary); color: var(--primary); font-weight: bold;" onchange="if(this.value) { DashboardManager.bulkUpdateStatus(this.value); this.value=''; }">
+        <select id="bulk-status-select" class="btn btn-outline" style="background: white; display: none; cursor: pointer; padding: 10px 16px; font-size: 0.85rem; border-color: var(--primary); color: var(--primary); font-weight: bold;" onchange="if(this.value) { window.DashboardManager.bulkUpdateStatus(this.value); this.value=''; }">
           <option value="">Cambiar Estado...</option>
           <option value="En Proceso">En Proceso</option>
           <option value="Entregado">Entregado</option>
           <option value="Pendiente">Pendiente</option>
-          <option value="Entrega para otro día">Para otro día</option>
-          <option value="Cancelado (Devolución)">Cancelado</option>
+          <option value="Entrega para otro d??a">Para otro d??a</option>
+          <option value="Solicitud de cambio recibida">Solicitud cambio recibida</option>
+          <option value="Solicitud de devoluci??n recibida">Solicitud devoluci??n recibida</option>
+          <option value="Pendiente de recoger">Pendiente de recoger</option>
+          <option value="Cambio en ruta">Cambio en ruta</option>
+          <option value="Devoluci??n en revisi??n">Devoluci??n en revisi??n</option>
+          <option value="Cambio completado">Cambio completado</option>
+          <option value="Devoluci??n completada">Devoluci??n completada</option>
+          <option value="Cancelado (Devoluci??n)">Cancelado</option>
         </select>
 
-        <button onclick="DashboardManager.deleteSelected()" class="btn btn-danger" id="btn-eliminar-sel" style="display: none; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);">
+        <button onclick="window.DashboardManager.deleteSelected()" class="btn btn-danger" id="btn-eliminar-sel" style="display: none; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);">
           <i data-lucide="trash"></i> Eliminar (<span id="sel-count-del">0</span>)
         </button>
-        <button onclick="DashboardManager.sendToGenerator()" class="btn btn-primary" id="btn-crear-guias" style="display: none; box-shadow: 0 4px 6px rgba(63, 53, 254, 0.2);">
+        <button onclick="window.DashboardManager.sendToGenerator()" class="btn btn-primary" id="btn-crear-guias" style="display: none; box-shadow: 0 4px 6px rgba(63, 53, 254, 0.2);">
           <i data-lucide="printer"></i> Imprimir (<span id="sel-count">0</span>) Guías
         </button>
       </div>
@@ -402,6 +513,10 @@
         <div class="stat-icon" style="background: #FEF3C7; color: #D97706;"><i data-lucide="clock"></i></div>
         <div class="stat-info"><h3>Pendientes</h3><p id="stat-pendientes">0</p></div>
       </div>
+      <div class="stat-card" style="border-color:#FED7AA; background:#FFF7ED;">
+        <div class="stat-icon" style="background: #FFEDD5; color: #C2410C;"><i data-lucide="refresh-ccw"></i></div>
+        <div class="stat-info"><h3>Postventa Abierta</h3><p id="stat-postventa">0</p></div>
+      </div>
       <div class="stat-card money">
         <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
         <div class="stat-info"><h3>Recaudo Estimado</h3><p id="stat-recaudo">RD$ 0</p></div>
@@ -411,9 +526,9 @@
         <div class="stat-info" style="width: 100%;">
           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
             <h3>Pago Mensajero 
-              <input type="number" id="dash-rate" value="300" class="rate-input" onchange="DashboardManager.updateRate(this.value)" title="Tarifa base (Distrito Nacional)">
+              <input type="number" id="dash-rate" value="300" class="rate-input" onchange="window.DashboardManager.updateRate(this.value)" title="Tarifa base (Distrito Nacional)">
             </h3>
-            <button onclick="DashboardManager.calculateCostsWithAI()" class="ai-btn secondary" id="btn-ai-cost" style="padding: 2px 6px; font-size: 0.65rem;" title="Analizar costos exactos por ubicación con IA">✨ IA</button>
+            <button onclick="window.DashboardManager.calculateCostsWithAI()" class="ai-btn secondary" id="btn-ai-cost" style="padding: 2px 6px; font-size: 0.65rem;" title="Analizar costos exactos por ubicación con IA">✨ IA</button>
           </div>
           <p id="stat-pago">RD$ 0</p>
           <span style="font-size: 0.65rem; color: #6D28D9; font-weight: 600;">Calculado por Zona</span>
@@ -427,23 +542,24 @@
         <div style="display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center;">
           <div class="search-box">
             <i data-lucide="search"></i>
-            <input type="text" id="dash-search" placeholder="Buscar por ID, Cliente o Ciudad..." onkeyup="DashboardManager.filterTable()">
+            <input type="text" id="dash-search" placeholder="Buscar por ID, Cliente o Ciudad..." onkeyup="window.DashboardManager.filterTable()">
           </div>
           <div class="filter-tabs" id="dash-filters">
-            <button class="filter-btn active" onclick="DashboardManager.setFilter('Todos', this)">Todos</button>
-            <button class="filter-btn" onclick="DashboardManager.setFilter('En Proceso', this)">En Proceso</button>
-            <button class="filter-btn" onclick="DashboardManager.setFilter('Pendiente', this)">Pendientes</button>
-            <button class="filter-btn" onclick="DashboardManager.setFilter('Entregado', this)">Entregados</button>
-            <button class="filter-btn" onclick="DashboardManager.setFilter('Cancelado', this)">Cancelados</button>
+            <button class="filter-btn active" onclick="window.DashboardManager.setFilter('Todos', this)">Todos</button>
+            <button class="filter-btn" onclick="window.DashboardManager.setFilter('En Proceso', this)">En Proceso</button>
+            <button class="filter-btn" onclick="window.DashboardManager.setFilter('Pendiente', this)">Pendientes</button>
+            <button class="filter-btn" onclick="window.DashboardManager.setFilter('Postventa', this)">Postventa</button>
+            <button class="filter-btn" onclick="window.DashboardManager.setFilter('Entregado', this)">Entregados</button>
+            <button class="filter-btn" onclick="window.DashboardManager.setFilter('Cancelado', this)">Cancelados</button>
           </div>
         </div>
         <!-- Filtro por Rango de Fechas -->
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--border); padding-top: 12px;">
           <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);"><i data-lucide="calendar" style="width:14px; height:14px; display:inline; margin-right:4px;"></i> Fecha de Entrega:</span>
-          <input type="date" id="filter-date-from" onchange="DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
+          <input type="date" id="filter-date-from" onchange="window.DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
           <span style="color: var(--text-muted); font-size: 0.8rem;">hasta</span>
-          <input type="date" id="filter-date-to" onchange="DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
-          <button onclick="DashboardManager.clearDateFilters()" class="filter-btn" style="font-size: 0.75rem; padding: 6px 10px; background: #E5E7EB;">Limpiar Fechas</button>
+          <input type="date" id="filter-date-to" onchange="window.DashboardManager.filterTable()" class="status-select" style="border: 1px solid var(--border); background: white; padding: 6px 10px;">
+          <button onclick="window.DashboardManager.clearDateFilters()" class="filter-btn" style="font-size: 0.75rem; padding: 6px 10px; background: #E5E7EB;">Limpiar Fechas</button>
         </div>
       </div>
     </div>
@@ -454,7 +570,7 @@
         <thead>
           <tr>
             <th style="width: 40px; text-align: center;">
-              <input type="checkbox" id="check-all" class="checkbox-custom" onchange="DashboardManager.toggleAll(this.checked)">
+              <input type="checkbox" id="check-all" class="checkbox-custom" onchange="window.DashboardManager.toggleAll(this.checked)">
             </th>
             <th>Pedido</th>
             <th>F. Pedido</th>
@@ -462,7 +578,7 @@
             <th>Cliente & Dirección</th>
             <th>Monto</th>
             <th style="width: 200px;">Estado</th>
-            <th style="text-align: center; width: 120px;">Acciones</th>
+            <th style="text-align: center; width: 260px;">Acciones</th>
           </tr>
         </thead>
         <tbody id="dash-table-body">
@@ -491,6 +607,7 @@
           <label style="font-size: 0.75rem; color: var(--text-muted);">Tipo de Reporte</label>
           <select id="report-type" class="status-select" style="border: 1px solid var(--border); background: white; padding: 8px 12px;">
             <option value="courier">Entregados vs Pago Mensajero</option>
+            <option value="postsale">Cambios y devoluciones</option>
             <option value="sales" disabled>Ventas Generales (Próximamente)</option>
           </select>
         </div>
@@ -503,10 +620,10 @@
           <input type="date" id="rep-date-to" style="padding: 8px 12px;">
         </div>
         <div style="flex: 1;"></div>
-        <button onclick="ReportsManager.generateReport()" class="btn btn-primary" style="padding: 10px 20px;">
+        <button onclick="window.ReportsManager.generateReport()" class="btn btn-primary" style="padding: 10px 20px;">
           <i data-lucide="bar-chart-2"></i> Generar
         </button>
-        <button onclick="ReportsManager.exportReportExcel()" class="btn btn-outline" style="padding: 10px 20px; background: white;">
+        <button onclick="window.ReportsManager.exportReportExcel()" class="btn btn-outline" style="padding: 10px 20px; background: white;">
           <i data-lucide="download"></i> Excel
         </button>
       </div>
@@ -864,7 +981,7 @@
         if (cleanedPhone.length === 10) cleanedPhone = '1' + cleanedPhone;
         if (!cleanedPhone) return '#';
         const message = `¡Hola ${data.recipientName}! Soy ${data.company}\n\nTe escribo para informarte que ya estoy en camino a entregarte tu pedido.\n\n*Detalles de su pedido:*\n- *Guía:* ${data.guideNumber}\n- *Contenido:* ${data.contentText}\n- *Monto a Pagar:* ${data.amount}\n\nPor favor, confírmame si te encuentras disponible para recibirlo en la dirección indicada. ¡Gracias!`;
-        return `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(message)}`;
+        return `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`;
       };
 
       const generateQRImage = (data) => {
@@ -1055,9 +1172,126 @@
 
       const printCourierList = () => {
         if (!guideBatch.length) return showToast('No hay guías cargadas.', 'error');
+        if (window.jspdf?.jsPDF) {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageHeight = doc.internal.pageSize.getHeight();
+          const margin = 10;
+          const lineHeight = 4.6;
+          const tableWidth = pageWidth - margin * 2;
+          const columns = [
+            { label: 'Gu?a', x: 12, w: 22 },
+            { label: 'Cliente', x: 38, w: 42 },
+            { label: 'Contenido', x: 84, w: 46 },
+            { label: 'Direcci?n / Nota', x: 134, w: 82 },
+            { label: 'Recaudo', x: 220, w: 25 },
+            { label: 'Acci?n', x: 250, w: 34 },
+          ];
+
+          const sanitizePdfText = (value) => String(value ?? '')
+            .replace(/[\u{1F1E6}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+            .replace(/[\uFE0E\uFE0F\u200D]/g, '')
+            .replace(/\s*•\s*/g, ' - ')
+            .replace(/[ \t]{2,}/g, ' ')
+            .trim();
+
+          const drawHeader = () => {
+            doc.setFillColor(63, 53, 254);
+            doc.rect(0, 0, pageWidth, 18, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text('MARKETUP', margin, 11);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('Listado de Despacho', margin + 33, 11);
+            doc.setTextColor(31, 41, 55);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.text('Paquetes para mensajero', margin, 27);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(107, 114, 128);
+            doc.text(`Total: ${guideBatch.length} paquetes`, pageWidth - margin, 27, { align: 'right' });
+            doc.setDrawColor(229, 231, 235);
+            doc.setFillColor(248, 249, 250);
+            doc.roundedRect(margin, 32, tableWidth, 9, 1.5, 1.5, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(55, 65, 81);
+            columns.forEach((col) => doc.text(col.label, col.x, 38));
+          };
+
+          const addWrappedText = (value, x, y, width, style = 'normal') => {
+            doc.setFont('helvetica', style);
+            const lines = doc.splitTextToSize(sanitizePdfText(value), width);
+            doc.text(lines, x, y);
+            return lines.length;
+          };
+
+          drawHeader();
+          let y = 47;
+
+          guideBatch.forEach((item, index) => {
+            const whatsappLink = getWhatsAppLinkWithMessage(item);
+            const addressText = sanitizePdfText(`${item.recipientAddress || ''}, ${item.recipientCity || ''}`);
+            const noteText = sanitizePdfText(`Nota: ${item.guideNote || 'Sin nota'}`);
+            const clientText = sanitizePdfText(`${item.recipientName || ''}\n${item.recipientPhone || ''}`);
+            const addressLines = doc.splitTextToSize(String(addressText || ''), columns[3].w);
+            const noteLines = doc.splitTextToSize(noteText, columns[3].w);
+            const rowLineCounts = [
+              doc.splitTextToSize(sanitizePdfText(item.guideNumber), columns[0].w).length,
+              doc.splitTextToSize(clientText, columns[1].w).length,
+              doc.splitTextToSize(sanitizePdfText(item.contentText), columns[2].w).length,
+              addressLines.length + noteLines.length,
+              doc.splitTextToSize(sanitizePdfText(item.amount), columns[4].w).length,
+              1,
+            ];
+            const rowHeight = Math.max(18, Math.max(...rowLineCounts) * lineHeight + 6);
+
+            if (y + rowHeight > pageHeight - 12) {
+              doc.addPage();
+              drawHeader();
+              y = 47;
+            }
+
+            doc.setFillColor(index % 2 === 0 ? 255 : 249, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 251);
+            doc.rect(margin, y - 5, tableWidth, rowHeight, 'F');
+            doc.setDrawColor(229, 231, 235);
+            doc.line(margin, y + rowHeight - 5, pageWidth - margin, y + rowHeight - 5);
+            doc.setTextColor(17, 24, 39);
+            doc.setFontSize(8);
+            addWrappedText(item.guideNumber, columns[0].x, y, columns[0].w, 'bold');
+            addWrappedText(clientText, columns[1].x, y, columns[1].w);
+            addWrappedText(item.contentText, columns[2].x, y, columns[2].w);
+            doc.setFont('helvetica', 'normal');
+            doc.text(addressLines, columns[3].x, y);
+            doc.setTextColor(107, 114, 128);
+            doc.setFontSize(7.2);
+            doc.text(noteLines, columns[3].x, y + (addressLines.length * lineHeight) + 1.5);
+            doc.setFontSize(8);
+            doc.setTextColor(17, 24, 39);
+            addWrappedText(item.amount, columns[4].x, y, columns[4].w, 'bold');
+            doc.setFillColor(16, 185, 129);
+            doc.roundedRect(columns[5].x, y - 4, 31, 8, 1.5, 1.5, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.textWithLink('WhatsApp', columns[5].x + 4, y + 1.5, { url: whatsappLink });
+            doc.setTextColor(17, 24, 39);
+            y += rowHeight;
+          });
+
+          const fileDate = new Date().toISOString().split('T')[0].replace(/-/g, '');
+          doc.save(`Despacho_${fileDate}.pdf`);
+          showToast('PDF de despacho generado con enlaces de WhatsApp.', 'success');
+          return;
+        }
+
         let rowsHTML = '';
         guideBatch.forEach((item) => {
-          rowsHTML += `<tr><td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${item.guideNumber}</strong></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${item.recipientName}<br><small style="color:#666;">${item.recipientPhone}</small></td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${item.contentText}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 200px;">${item.recipientAddress}, ${item.recipientCity}</td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${item.amount}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: center;"><a href="${getWhatsAppLinkWithMessage(item)}" target="_blank" style="color: #0056b3; font-weight: bold;">WhatsApp</a></td></tr>`;
+          const instructionNote = escapeHtml(item.guideNote || '').replace(/\n/g, '<br>');
+          rowsHTML += `<tr><td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(item.guideNumber)}</strong></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.recipientName)}<br><small style="color:#666;">${escapeHtml(item.recipientPhone)}</small></td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${escapeHtml(item.contentText)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 260px; white-space: normal; line-height: 1.4;">${escapeHtml(item.recipientAddress)}, ${escapeHtml(item.recipientCity)}<div style="margin-top:8px; font-size:12px;"><strong>Nota:</strong> ${instructionNote || '<span style="color:#999;">Sin nota</span>'}</div></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.amount)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: left; min-width: 160px;"><a href="${escapeHtml(getWhatsAppLinkWithMessage(item))}" style="color: #0056b3; font-weight: bold; text-decoration: underline;">Abrir WhatsApp</a></td></tr>`;
         });
         const printWin = window.open('', '_blank'); if (!printWin) return showToast('Desbloquea pop-ups.', 'warning');
         printWin.document.write(`<!DOCTYPE html><html lang="es"><head><style>body{font-family:sans-serif;margin:40px} table{width:100%;border-collapse:collapse} th{background:#f8f9fa;padding:12px;text-align:left;border-bottom:2px solid #ddd} td{padding:12px;border-bottom:1px solid #ddd}</style></head><body><h2>Listado de Despacho</h2><p>Total Paquetes: ${guideBatch.length}</p><table><thead><tr><th>Guía</th><th>Cliente</th><th>Contenido</th><th>Dirección</th><th>Recaudo</th><th>Acción</th></tr></thead><tbody>${rowsHTML}</tbody></table><script>setTimeout(()=>window.print(), 500);<\/script></body></html>`);
@@ -1307,7 +1541,7 @@
         const pending = orders.filter(o => !o.status.includes('Entregado') && !o.status.includes('Cancelado') && !o.status.includes('Devolución'));
         const totalRevenue = delivered.reduce((sum, o) => sum + o.numericAmount, 0);
         
-        const totalPago = delivered.reduce((sum, o) => sum + (o.aiCalculated ? o.courierCost : DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)), 0);
+        const totalPago = delivered.reduce((sum, o) => sum + (o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)), 0);
         
         document.getElementById('stat-total').textContent = orders.length;
         document.getElementById('stat-entregados').textContent = delivered.length;
@@ -1503,12 +1737,12 @@
           return `
           <tr class="${selectedIds.has(o.id) ? 'selected' : ''}">
             <td style="text-align:center;">
-              <input type="checkbox" class="checkbox-custom row-check" data-id="${o.id}" ${selectedIds.has(o.id)?'checked':''} onchange="DashboardManager.toggleSelection('${o.id}', this.checked)">
+              <input type="checkbox" class="checkbox-custom row-check" data-id="${o.id}" ${selectedIds.has(o.id)?'checked':''} onchange="window.DashboardManager.toggleSelection('${o.id}', this.checked)">
             </td>
             <td><strong style="color:var(--primary); font-size:0.9rem;">${o.id}</strong></td>
             <td style="font-size:0.8rem; color:var(--text-muted); white-space:nowrap;">${o.date || ''}</td>
             <td>
-              <input type="date" data-id="${o.id}" class="delivery-date-input" value="${o.deliveryDate || ''}" onchange="DashboardManager.updateDeliveryDate('${o.id}', this.value)" style="border:1px solid transparent; background:transparent; font-size:0.8rem; color:var(--text-main); font-weight: 600; font-family:inherit; cursor:pointer; border-radius: 4px; padding: 2px;">
+              <input type="date" data-id="${o.id}" class="delivery-date-input" value="${o.deliveryDate || ''}" onchange="window.DashboardManager.updateDeliveryDate('${o.id}', this.value)" style="border:1px solid transparent; background:transparent; font-size:0.8rem; color:var(--text-main); font-weight: 600; font-family:inherit; cursor:pointer; border-radius: 4px; padding: 2px;">
             </td>
             <td>
               <div style="font-weight:700; color:var(--text-main); margin-bottom:2px;">${o.name} <span style="font-weight:400; color:#6B7280; font-size:0.75rem;">(${o.phone})</span></div>
@@ -1517,12 +1751,12 @@
             <td style="font-weight:600;">
               ${o.amountStr}
               <div style="font-size: 0.7rem; color: #8B5CF6; font-weight: 600; margin-top: 4px;" title="Costo por envío a ${o.city}">
-                Envío: RD$ ${o.aiCalculated ? o.courierCost : DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)} 
+                Envío: RD$ ${o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)} 
                 ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
               </div>
             </td>
             <td>
-              <select class="status-select" onchange="DashboardManager.updateStatus('${o.id}', this.value)">
+              <select class="status-select" onchange="window.DashboardManager.updateStatus('${o.id}', this.value)">
                 ${!['En Proceso', 'Entregado', 'Pendiente', 'Cancelado (Devolución)', 'Entrega para otro día'].includes(o.status) ? `<option value="${o.status}">${o.status}</option>` : ''}
                 <option value="En Proceso" ${o.status==='En Proceso'?'selected':''}>En Proceso</option>
                 <option value="Entregado" ${o.status==='Entregado'?'selected':''}>Entregado</option>
@@ -1533,11 +1767,11 @@
               ${getBadgeHTML(o.status)}
             </td>
             <td style="text-align:center; display:flex; justify-content:center; gap:6px;">
-              <button onclick="DashboardManager.editOrder('${o.id}')" class="whatsapp-btn" style="background:#E0E7FF; color:#4338CA; padding:6px;" title="Editar Pedido"><i data-lucide="edit-2" style="width:14px;height:14px;"></i></button>
+              <button onclick="window.DashboardManager.editOrder('${o.id}')" class="whatsapp-btn" style="background:#E0E7FF; color:#4338CA; padding:6px;" title="Editar Pedido"><i data-lucide="edit-2" style="width:14px;height:14px;"></i></button>
               <a href="https://wa.me/${o.ws}" target="_blank" class="whatsapp-btn" style="padding:6px;" title="WhatsApp Básico"><i data-lucide="message-circle" style="width:14px;height:14px;"></i></a>
               ${!isCanceled 
-                ? `<button onclick="DashboardManager.generateSmartWA('${o.id}')" class="whatsapp-btn smart-wa-btn" id="wa-btn-${o.id}" title="✨ Crear mensaje Inteligente" style="font-size:11px; font-weight:bold; padding:6px;">✨ IA</button>`
-                : `<button onclick="DashboardManager.generateWinBackWA('${o.id}')" class="whatsapp-btn" style="background:#FEE2E2; color:#991B1B; font-size:11px; font-weight:bold; border:1px solid #FCA5A5; padding:6px;" id="wa-winback-${o.id}" title="✨ Mensaje para recuperar venta">✨</button>`
+                ? `<button onclick="window.DashboardManager.generateSmartWA('${o.id}')" class="whatsapp-btn smart-wa-btn" id="wa-btn-${o.id}" title="✨ Crear mensaje Inteligente" style="font-size:11px; font-weight:bold; padding:6px;">✨ IA</button>`
+                : `<button onclick="window.DashboardManager.generateWinBackWA('${o.id}')" class="whatsapp-btn" style="background:#FEE2E2; color:#991B1B; font-size:11px; font-weight:bold; border:1px solid #FCA5A5; padding:6px;" id="wa-winback-${o.id}" title="✨ Mensaje para recuperar venta">✨</button>`
               }
             </td>
           </tr>
@@ -1777,6 +2011,8 @@
       return { getOrders, getRate, importExcel, exportExcel, renderTable, setFilter, filterTable, clearDateFilters, toggleSelection, toggleAll, updateStatus, updateDeliveryDate, updateRate, sendToGenerator, generateSmartWA, generateWinBackWA, analyzeRouteWithAI, magicPasteAI, deleteSelected, clearAllDashboard, calculateCourierCostLocal, calculateCostsWithAI, saveNewOrder, bulkUpdateStatus, configureAI, openNewOrderModal, editOrder };
     })();
 
+    window.DashboardManager = DashboardManager;
+
     // -------------------------------------------------------------
     // LÓGICA DEL GESTOR DE REPORTES Y COPIAS DE SEGURIDAD
     // -------------------------------------------------------------
@@ -1794,8 +2030,8 @@
         };
 
         const generateCourierReport = (from, to) => {
-            const allOrders = DashboardManager.getOrders();
-            const rate = DashboardManager.getRate();
+            const allOrders = window.DashboardManager.getOrders();
+            const rate = window.DashboardManager.getRate();
             
             // Filtrar solo entregados y por rango de fechas
             const filtered = allOrders.filter(o => {
@@ -1835,7 +2071,7 @@
             const tbody = filtered.map(o => {
                 const targetDate = o.deliveryDate || o.date;
                 const recaudo = o.numericAmount;
-                const costoEnvio = o.aiCalculated ? o.courierCost : DashboardManager.calculateCourierCostLocal(o.city, o.address, rate);
+                const costoEnvio = o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate);
                 const neto = recaudo - costoEnvio;
 
                 totalRecaudo += recaudo;
@@ -1878,7 +2114,7 @@
             currentReportData = filtered.map(o => {
                 const targetDate = o.deliveryDate || o.date;
                 const recaudo = o.numericAmount;
-                const costoEnvio = o.aiCalculated ? o.courierCost : DashboardManager.calculateCourierCostLocal(o.city, o.address, rate);
+                const costoEnvio = o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate);
                 const neto = recaudo - costoEnvio;
                 return {
                     'Pedido': o.id, 'Fecha Entrega': targetDate, 'Cliente': o.name, 'Ciudad': o.city,
@@ -1898,6 +2134,8 @@
 
         return { generateReport, exportReportExcel };
     })();
+
+    window.ReportsManager = ReportsManager;
 
     // -------------------------------------------------------------
     // LÓGICA DE BACKUP DEL SISTEMA
@@ -1962,6 +2200,784 @@
       return { exportBackup, importBackup };
     })();
   </script>
+  <script>
+(function () {
+  const RETURN_FORM_URL = 'https://ronnielav.github.io/Formulatio-De-Devolucion-y-Cambio/';
+  const DEFAULT_STATUSES = ['En Proceso', 'Entregado', 'Pendiente', 'Entrega para otro día', 'Cancelado (Devolución)'];
+  const POST_SALE_STATUSES = [
+    'Solicitud de cambio recibida',
+    'Solicitud de devolución recibida',
+    'Pendiente de recoger',
+    'Producto recogido',
+    'Cambio en ruta',
+    'Devolución en revisión',
+    'Cambio completado',
+    'Devolución completada',
+    'Reembolso pendiente',
+    'Caso cerrado'
+  ];
+  const ALL_STATUSES = [...DEFAULT_STATUSES, ...POST_SALE_STATUSES];
+
+  const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const fmt = (n) => `RD$ ${Number(n || 0).toLocaleString('en-US')}`;
+  const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  const isPostSaleStatus = (s) => POST_SALE_STATUSES.includes(s);
+  const isPostSaleOrder = (o) => !!(o?.postSale?.type || o?.postSale?.status || o?.postSale?.routeAction);
+  const isClosedPostSale = (o) => ['Cambio completado', 'Devolución completada', 'Caso cerrado'].includes(o?.postSale?.status || '');
+
+  let orders = [];
+  let selectedIds = new Set();
+  let rate = 300;
+  let currentFilter = 'Todos';
+  let currentSearch = '';
+  let filterDateFrom = '';
+  let filterDateTo = '';
+  let currentReportData = [];
+  let currentReportName = 'Reporte';
+
+  const getDefaultPostSale = () => ({
+    type: '',
+    status: '',
+    resolution: '',
+    routeAction: '',
+    formUrl: '',
+    pdfUrl: '',
+    notes: '',
+    updatedAt: '',
+  });
+
+  const sanitizeOrder = (order) => ({
+    id: String(order.id || '').trim(),
+    date: String(order.date || new Date().toISOString().split('T')[0]).trim(),
+    deliveryDate: String(order.deliveryDate || '').trim(),
+    name: String(order.name || 'Sin Nombre').trim(),
+    phone: String(order.phone || '').trim(),
+    address: String(order.address || '').trim(),
+    city: String(order.city || '').trim(),
+    product: String(order.product || '').trim(),
+    amountStr: String(order.amountStr || `RD$ ${Number(order.numericAmount || 0)}`),
+    numericAmount: Number(order.numericAmount || 0),
+    status: String(order.status || 'En Proceso').trim(),
+    ws: String(order.ws || '').trim(),
+    notes: String(order.notes || '').trim(),
+    aiCalculated: !!order.aiCalculated,
+    courierCost: Number(order.courierCost || 0),
+    postSale: { ...getDefaultPostSale(), ...(order.postSale || {}) }
+  });
+
+  const save = () => localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
+  const load = () => {
+    try {
+      const raw = localStorage.getItem('marketup_dashboard');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        orders = (parsed.orders || []).map(sanitizeOrder);
+        rate = parsed.rate || 300;
+      }
+    } catch (e) {
+      orders = [];
+    }
+  };
+
+  const buildReturnFormUrl = (order) => {
+    const params = new URLSearchParams({
+      pedido: order?.id || '',
+      cliente: order?.name || '',
+      telefono: order?.phone || '',
+      producto: order?.product || ''
+    });
+    return `${RETURN_FORM_URL}?${params.toString()}`;
+  };
+
+  const calculateCourierCostLocal = (city, address, baseRate) => {
+    const loc = norm(`${city} ${address}`);
+    if (loc.includes('haina') || loc.includes('san cristobal') || loc.includes('boca chica') || loc.includes('pedro brand') || loc.includes('boca de nigua')) return 450;
+    if (loc.includes('este') || loc.includes('sde') || loc.includes('san isidro') || loc.includes('norte') || loc.includes('sdn') || loc.includes('villa mella') || loc.includes('oeste') || loc.includes('sdo') || loc.includes('herrera') || loc.includes('caobas') || loc.includes('alcarrizos')) return 350;
+    return baseRate;
+  };
+
+  const ensureUI = () => {
+    const actionsWrap = document.getElementById('btn-crear-guias')?.parentElement;
+    if (actionsWrap && !document.getElementById('btn-ruta-postventa')) {
+      const btn = document.createElement('button');
+      btn.id = 'btn-ruta-postventa';
+      btn.className = 'btn btn-outline';
+      btn.style.display = 'none';
+      btn.style.background = '#FFF7ED';
+      btn.style.color = '#C2410C';
+      btn.style.borderColor = '#FDBA74';
+      btn.innerHTML = '<i data-lucide="truck"></i> Ruta Postventa';
+      btn.onclick = () => dashboard.sendPostSaleToGenerator();
+      actionsWrap.appendChild(btn);
+    }
+
+    const bulk = document.getElementById('bulk-status-select');
+    if (bulk) {
+      const existing = new Set(Array.from(bulk.options).map((o) => o.value));
+      POST_SALE_STATUSES.forEach((status) => {
+        if (!existing.has(status)) {
+          const opt = document.createElement('option');
+          opt.value = status;
+          opt.textContent = status;
+          bulk.appendChild(opt);
+        }
+      });
+    }
+
+    const filterTabs = document.getElementById('dash-filters');
+    if (filterTabs && !Array.from(filterTabs.children).some((el) => el.textContent.includes('Postventa'))) {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn';
+      btn.textContent = 'Postventa';
+      btn.onclick = () => dashboard.setFilter('Postventa', btn);
+      filterTabs.insertBefore(btn, filterTabs.children[3] || null);
+    }
+
+    const statsGrid = document.querySelector('#view-dashboard .stats-grid');
+    if (statsGrid && !document.getElementById('stat-postventa')) {
+      const card = document.createElement('div');
+      card.className = 'stat-card';
+      card.style.borderColor = '#FED7AA';
+      card.style.background = '#FFF7ED';
+      card.innerHTML = '<div class="stat-icon" style="background:#FFEDD5;color:#C2410C;"><i data-lucide="refresh-ccw"></i></div><div class="stat-info"><h3>Postventa Abierta</h3><p id="stat-postventa">0</p></div>';
+      statsGrid.insertBefore(card, statsGrid.children[3] || null);
+    }
+
+    const reportType = document.getElementById('report-type');
+    if (reportType && !Array.from(reportType.options).some((o) => o.value === 'postsale')) {
+      const opt = document.createElement('option');
+      opt.value = 'postsale';
+      opt.textContent = 'Cambios y devoluciones';
+      reportType.appendChild(opt);
+    }
+
+    const th = document.querySelector('.dash-table thead tr th:last-child');
+    if (th) th.style.width = '260px';
+  };
+
+  const renderStats = () => {
+    const delivered = orders.filter((o) => norm(o.status).includes('entregado'));
+    const pending = orders.filter((o) => !norm(o.status).includes('entregado') && !norm(o.status).includes('cancelado') && !isPostSaleStatus(o.status));
+    const postSaleOpen = orders.filter((o) => isPostSaleOrder(o) && !isClosedPostSale(o));
+    const totalRevenue = delivered.reduce((sum, o) => sum + o.numericAmount, 0);
+    const totalPago = delivered.reduce((sum, o) => sum + (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)), 0);
+    const byId = (id) => document.getElementById(id);
+    if (byId('stat-total')) byId('stat-total').textContent = orders.length;
+    if (byId('stat-entregados')) byId('stat-entregados').textContent = delivered.length;
+    if (byId('stat-pendientes')) byId('stat-pendientes').textContent = pending.length;
+    if (byId('stat-postventa')) byId('stat-postventa').textContent = postSaleOpen.length;
+    if (byId('stat-recaudo')) byId('stat-recaudo').textContent = fmt(totalRevenue);
+    if (byId('stat-pago')) byId('stat-pago').textContent = fmt(totalPago);
+  };
+
+  const getBadgeHTML = (status) => {
+    const s = norm(status);
+    if (s.includes('entregado')) return '<span class="status-badge" style="background:#D1FAE5; color:#065F46;">Entregado</span>';
+    if (s.includes('proceso')) return '<span class="status-badge" style="background:#DBEAFE; color:#3730A3;">En Proceso</span>';
+    if (s.includes('cambio')) return '<span class="status-badge" style="background:#E0E7FF; color:#3730A3;">Cambio</span>';
+    if (s.includes('devoluci') || s.includes('reembolso')) return '<span class="status-badge" style="background:#FEE2E2; color:#991B1B;">Devolución</span>';
+    if (s.includes('recoger') || s.includes('ruta')) return '<span class="status-badge" style="background:#FEF3C7; color:#92400E;">Ruta</span>';
+    if (s.includes('cancelado')) return '<span class="status-badge" style="background:#FEE2E2; color:#991B1B;">Cancelado</span>';
+    return `<span class="status-badge" style="background:#FEF3C7; color:#92400E;">${escapeHtml(status)}</span>`;
+  };
+
+  const getStatusOptions = (currentStatus) => {
+    const items = currentStatus && !ALL_STATUSES.includes(currentStatus) ? [currentStatus, ...ALL_STATUSES] : ALL_STATUSES;
+    return items.map((status) => `<option value="${escapeHtml(status)}" ${currentStatus === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('');
+  };
+
+  const getFilteredOrders = () => orders.filter((o) => {
+    const haystack = norm([o.name, o.id, o.city, o.address, o.product, o.postSale?.status, o.postSale?.notes, o.postSale?.resolution].join(' '));
+    const mSearch = haystack.includes(currentSearch);
+    const mStatus = currentFilter === 'Todos'
+      || (currentFilter === 'Cancelado' && norm(o.status).includes('cancelado'))
+      || (currentFilter === 'Postventa' && isPostSaleOrder(o))
+      || norm(o.status).includes(norm(currentFilter));
+    const targetDate = o.postSale?.updatedAt || o.deliveryDate || o.date;
+    const mDate = (!filterDateFrom || targetDate >= filterDateFrom) && (!filterDateTo || targetDate <= filterDateTo);
+    return mSearch && mStatus && mDate;
+  });
+
+  const updateSelectedUI = () => {
+    const count = selectedIds.size;
+    const btnGuias = document.getElementById('btn-crear-guias');
+    const btnDelete = document.getElementById('btn-eliminar-sel');
+    const btnRoute = document.getElementById('btn-ruta-postventa');
+    const bulk = document.getElementById('bulk-status-select');
+    if (document.getElementById('sel-count')) document.getElementById('sel-count').textContent = count;
+    if (document.getElementById('sel-count-del')) document.getElementById('sel-count-del').textContent = count;
+    if (btnGuias) btnGuias.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (btnDelete) btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (bulk) bulk.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (btnRoute) {
+      const selected = orders.filter((o) => selectedIds.has(o.id));
+      btnRoute.style.display = count > 0 && selected.some(isPostSaleOrder) ? 'inline-flex' : 'none';
+    }
+    document.querySelectorAll('.row-check').forEach((chk) => {
+      const id = chk.getAttribute('data-id');
+      chk.checked = selectedIds.has(id);
+      const tr = chk.closest('tr');
+      if (tr) tr.classList.toggle('selected', chk.checked);
+    });
+  };
+
+  const postSaleSummary = (order) => {
+    if (!isPostSaleOrder(order)) return '';
+    const chips = [];
+    if (order.postSale.type === 'change') chips.push('<span class="postsale-chip change"><i data-lucide="refresh-cw" style="width:12px;height:12px;"></i> Cambio</span>');
+    if (order.postSale.type === 'return') chips.push('<span class="postsale-chip return"><i data-lucide="rotate-ccw" style="width:12px;height:12px;"></i> Devolución</span>');
+    if (order.postSale.routeAction) chips.push(`<span class="postsale-chip route"><i data-lucide="truck" style="width:12px;height:12px;"></i> ${escapeHtml(order.postSale.routeAction)}</span>`);
+    const status = order.postSale.status ? `<div style="font-size:0.72rem;color:#9A3412;margin-top:4px;font-weight:600;">${escapeHtml(order.postSale.status)}</div>` : '';
+    const res = order.postSale.resolution ? `<div style="font-size:0.72rem;color:#6B7280;margin-top:2px;">${escapeHtml(order.postSale.resolution)}</div>` : '';
+    return `<div>${chips.join('')}</div>${status}${res}`;
+  };
+
+  const renderTable = () => {
+    const tbody = document.getElementById('dash-table-body');
+    if (!tbody) return;
+    const filtered = getFilteredOrders();
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#6B7280;">No se encontraron pedidos en este rango.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtered.map((o) => {
+      const isCanceled = norm(o.status).includes('cancelado') || norm(o.status).includes('devoluci');
+      const hasDoc = !!o.postSale?.pdfUrl;
+      return `
+      <tr class="${selectedIds.has(o.id) ? 'selected' : ''}">
+        <td style="text-align:center;">
+          <input type="checkbox" class="checkbox-custom row-check" data-id="${escapeHtml(o.id)}" ${selectedIds.has(o.id) ? 'checked' : ''} onchange="DashboardManager.toggleSelection('${escapeHtml(o.id)}', this.checked)">
+        </td>
+        <td><strong style="color:var(--primary); font-size:0.9rem;">${escapeHtml(o.id)}</strong></td>
+        <td style="font-size:0.8rem; color:var(--text-muted); white-space:nowrap;">${escapeHtml(o.date || '')}</td>
+        <td><input type="date" data-id="${escapeHtml(o.id)}" class="delivery-date-input" value="${escapeHtml(o.deliveryDate || '')}" onchange="DashboardManager.updateDeliveryDate('${escapeHtml(o.id)}', this.value)" style="border:1px solid transparent; background:transparent; font-size:0.8rem; color:var(--text-main); font-weight:600; font-family:inherit; cursor:pointer; border-radius:4px; padding:2px;"></td>
+        <td>
+          <div style="font-weight:700; color:var(--text-main); margin-bottom:2px;">${escapeHtml(o.name)} <span style="font-weight:400; color:#6B7280; font-size:0.75rem;">(${escapeHtml(o.phone)})</span></div>
+          <div style="font-size:0.75rem; color:var(--text-muted); max-width:250px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(o.city)} - ${escapeHtml(o.address)}">${escapeHtml(o.city)} • ${escapeHtml(o.address)}</div>
+          ${postSaleSummary(o)}
+        </td>
+        <td style="font-weight:600;">
+          ${escapeHtml(o.amountStr)}
+          <div style="font-size:0.7rem; color:#8B5CF6; font-weight:600; margin-top:4px;" title="Costo por envío a ${escapeHtml(o.city)}">
+            Envío: ${fmt(o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate))}
+            ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
+          </div>
+        </td>
+        <td>
+          <select class="status-select" onchange="DashboardManager.updateStatus('${escapeHtml(o.id)}', this.value)">${getStatusOptions(o.status)}</select><br>
+          ${getBadgeHTML(o.status)}
+        </td>
+        <td style="text-align:center;">
+          <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:6px;">
+            <button onclick="window.DashboardManager.editOrder('${escapeHtml(o.id)}')" class="whatsapp-btn" style="background:#E0E7FF; color:#4338CA; padding:6px;" title="Editar Pedido"><i data-lucide="edit-2" style="width:14px;height:14px;"></i></button>
+            <a href="https://wa.me/${escapeHtml(o.ws || '')}" target="_blank" class="whatsapp-btn" style="padding:6px;" title="WhatsApp Básico"><i data-lucide="message-circle" style="width:14px;height:14px;"></i></a>
+            <button onclick="window.DashboardManager.openPostSaleModal('${escapeHtml(o.id)}')" class="tiny-btn route" title="Gestionar cambio o devolución"><i data-lucide="refresh-ccw" style="width:13px;height:13px;"></i> Caso</button>
+            <button onclick="window.DashboardManager.openReturnForm('${escapeHtml(o.id)}')" class="tiny-btn form" title="Abrir formulario"><i data-lucide="external-link" style="width:13px;height:13px;"></i> Form</button>
+            ${hasDoc ? `<button onclick="window.DashboardManager.openPostSaleDocument('${escapeHtml(o.id)}')" class="tiny-btn doc" title="Abrir PDF"><i data-lucide="file-text" style="width:13px;height:13px;"></i> PDF</button>` : ''}
+            ${isPostSaleOrder(o)
+              ? `<button onclick="window.DashboardManager.generatePostSaleWA('${escapeHtml(o.id)}')" class="whatsapp-btn smart-wa-btn" title="Seguimiento postventa" style="font-size:11px; font-weight:bold; padding:6px;">PS</button>`
+              : (!isCanceled
+                ? `<button onclick="window.DashboardManager.generateSmartWA('${escapeHtml(o.id)}')" class="whatsapp-btn smart-wa-btn" id="wa-btn-${escapeHtml(o.id)}" title="Crear mensaje inteligente" style="font-size:11px; font-weight:bold; padding:6px;">✨ IA</button>`
+                : `<button onclick="window.DashboardManager.generateWinBackWA('${escapeHtml(o.id)}')" class="whatsapp-btn" style="background:#FEE2E2; color:#991B1B; font-size:11px; font-weight:bold; border:1px solid #FCA5A5; padding:6px;" id="wa-winback-${escapeHtml(o.id)}" title="Mensaje para recuperar venta">✨</button>`)}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+    updateSelectedUI();
+  };
+
+  const syncPostSaleFromStatus = (order, newStatus) => {
+    if (!isPostSaleStatus(newStatus)) return;
+    order.postSale = { ...getDefaultPostSale(), ...(order.postSale || {}) };
+    if (!order.postSale.type) order.postSale.type = norm(newStatus).includes('cambio') ? 'change' : 'return';
+    order.postSale.status = newStatus;
+    order.postSale.updatedAt = new Date().toISOString().split('T')[0];
+    if (!order.postSale.formUrl) order.postSale.formUrl = buildReturnFormUrl(order);
+  };
+
+  const dashboard = {
+    getOrders: () => orders,
+    getRate: () => rate,
+    calculateCourierCostLocal,
+    renderTable,
+    setFilter(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach((b) => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderTable();
+    },
+    filterTable() {
+      currentSearch = norm(document.getElementById('dash-search')?.value || '');
+      filterDateFrom = document.getElementById('filter-date-from')?.value || '';
+      filterDateTo = document.getElementById('filter-date-to')?.value || '';
+      renderTable();
+    },
+    clearDateFilters() {
+      if (document.getElementById('filter-date-from')) document.getElementById('filter-date-from').value = '';
+      if (document.getElementById('filter-date-to')) document.getElementById('filter-date-to').value = '';
+      dashboard.filterTable();
+    },
+    toggleSelection(id, isChecked) {
+      if (isChecked) selectedIds.add(id); else selectedIds.delete(id);
+      updateSelectedUI();
+    },
+    toggleAll(isChecked) {
+      const filtered = getFilteredOrders();
+      if (isChecked) filtered.forEach((o) => selectedIds.add(o.id)); else filtered.forEach((o) => selectedIds.delete(o.id));
+      updateSelectedUI();
+      renderTable();
+    },
+    updateDeliveryDate(id, newDate) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      order.deliveryDate = newDate;
+      save();
+      showToast('Fecha de entrega actualizada', 'success');
+    },
+    updateStatus(id, newStatus) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      order.status = newStatus;
+      syncPostSaleFromStatus(order, newStatus);
+      if (newStatus === 'Pendiente') {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        order.deliveryDate = tomorrow.toISOString().split('T')[0];
+      }
+      save();
+      renderStats();
+      renderTable();
+    },
+    updateRate(val) {
+      rate = Number(val) || 0;
+      save();
+      renderStats();
+      renderTable();
+    },
+    openNewOrderModal() {
+      document.getElementById('new-order-form')?.reset();
+      document.getElementById('edit-order-id').value = '';
+      document.getElementById('modal-title-text').innerText = 'Ingresar Nuevo Pedido';
+      document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('magic-paste-text').value = '';
+      document.getElementById('new-order-modal').style.display = 'flex';
+    },
+    editOrder(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      document.getElementById('edit-order-id').value = order.id;
+      document.getElementById('new-name').value = order.name;
+      document.getElementById('new-date').value = order.date;
+      document.getElementById('new-phone').value = order.phone;
+      document.getElementById('new-city').value = order.city;
+      document.getElementById('new-address').value = order.address;
+      document.getElementById('new-product').value = order.product;
+      document.getElementById('new-amount').value = order.numericAmount;
+      document.getElementById('modal-title-text').innerText = `Editar Pedido (${order.id})`;
+      document.getElementById('new-order-modal').style.display = 'flex';
+    },
+    saveNewOrder(e) {
+      e.preventDefault();
+      const editId = document.getElementById('edit-order-id').value;
+      const payload = {
+        date: document.getElementById('new-date').value,
+        name: document.getElementById('new-name').value.trim(),
+        phone: document.getElementById('new-phone').value.trim(),
+        city: document.getElementById('new-city').value.trim(),
+        address: document.getElementById('new-address').value.trim(),
+        product: document.getElementById('new-product').value.trim(),
+        numericAmount: parseFloat(document.getElementById('new-amount').value) || 0,
+      };
+      payload.amountStr = `RD$ ${payload.numericAmount}`;
+      let ws = payload.phone.replace(/\D/g, '');
+      if (ws.length === 10) ws = `1${ws}`;
+      payload.ws = ws;
+      if (editId) {
+        const order = orders.find((o) => o.id === editId);
+        Object.assign(order, payload);
+        showToast(`Pedido ${editId} actualizado exitosamente`, 'success');
+      } else {
+        const maxNum = orders.reduce((m, o) => {
+          const match = String(o.id).match(/PED-?(\d+)/i);
+          return match ? Math.max(m, parseInt(match[1], 10)) : m;
+        }, 0);
+        orders.unshift(sanitizeOrder({ ...payload, id: `PED${String(maxNum + 1).padStart(3, '0')}`, status: 'En Proceso', notes: '' }));
+        showToast('Pedido creado exitosamente', 'success');
+      }
+      save();
+      renderStats();
+      renderTable();
+      document.getElementById('new-order-modal').style.display = 'none';
+      document.getElementById('new-order-form').reset();
+    },
+    openPostSaleModal(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      order.postSale = { ...getDefaultPostSale(), ...(order.postSale || {}) };
+      if (!order.postSale.formUrl) order.postSale.formUrl = buildReturnFormUrl(order);
+      document.getElementById('postsale-order-id').value = order.id;
+      document.getElementById('postsale-title-text').innerText = `Gestionar postventa (${order.id})`;
+      document.getElementById('postsale-type').value = order.postSale.type || '';
+      document.getElementById('postsale-status').value = order.postSale.status || '';
+      document.getElementById('postsale-resolution').value = order.postSale.resolution || '';
+      document.getElementById('postsale-route-action').value = order.postSale.routeAction || '';
+      document.getElementById('postsale-form-url').value = order.postSale.formUrl || '';
+      document.getElementById('postsale-pdf-url').value = order.postSale.pdfUrl || '';
+      document.getElementById('postsale-notes').value = order.postSale.notes || '';
+      document.getElementById('postsale-modal').style.display = 'flex';
+    },
+    savePostSaleCase(e) {
+      e.preventDefault();
+      const id = document.getElementById('postsale-order-id').value;
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      const type = document.getElementById('postsale-type').value;
+      const status = document.getElementById('postsale-status').value || (type === 'change' ? 'Solicitud de cambio recibida' : type === 'return' ? 'Solicitud de devolución recibida' : '');
+      order.postSale = {
+        ...getDefaultPostSale(),
+        ...(order.postSale || {}),
+        type,
+        status,
+        resolution: document.getElementById('postsale-resolution').value.trim(),
+        routeAction: document.getElementById('postsale-route-action').value,
+        formUrl: document.getElementById('postsale-form-url').value.trim() || buildReturnFormUrl(order),
+        pdfUrl: document.getElementById('postsale-pdf-url').value.trim(),
+        notes: document.getElementById('postsale-notes').value.trim(),
+        updatedAt: new Date().toISOString().split('T')[0],
+      };
+      if (status) order.status = status;
+      save();
+      renderStats();
+      renderTable();
+      document.getElementById('postsale-modal').style.display = 'none';
+      showToast(`Caso de postventa guardado para ${id}.`, 'success');
+    },
+    openReturnForm(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      const url = buildReturnFormUrl(order);
+      order.postSale = { ...getDefaultPostSale(), ...(order.postSale || {}), formUrl: url };
+      save();
+      window.open(url, '_blank');
+    },
+    openReturnFormFromModal() {
+      const id = document.getElementById('postsale-order-id').value;
+      if (id) dashboard.openReturnForm(id);
+    },
+    async copyReturnFormLink() {
+      const id = document.getElementById('postsale-order-id').value;
+      const order = orders.find((o) => o.id === id);
+      if (!order) return showToast('Abre primero un caso de postventa.', 'warning');
+      const url = document.getElementById('postsale-form-url').value || buildReturnFormUrl(order);
+      try {
+        await navigator.clipboard.writeText(url);
+        document.getElementById('postsale-form-url').value = url;
+        showToast('Link del formulario copiado.', 'success');
+      } catch (e) {
+        showToast('No se pudo copiar el link.', 'error');
+      }
+    },
+    openPostSaleDocument(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order?.postSale?.pdfUrl) return showToast('Este caso no tiene documento asociado.', 'warning');
+      window.open(order.postSale.pdfUrl, '_blank');
+    },
+    openPostSaleQueue() {
+      const btn = Array.from(document.querySelectorAll('#dash-filters .filter-btn')).find((b) => b.textContent.includes('Postventa'));
+      dashboard.setFilter('Postventa', btn);
+      showToast('Mostrando casos de cambios y devoluciones.', 'info');
+    },
+    sendToGenerator() {
+      const selected = orders.filter((o) => selectedIds.has(o.id));
+      if (!selected.length) return;
+      ShippingGuideManager.setBatchFromDashboard(selected);
+      switchTab('generator');
+      showToast(`${selected.length} pedido(s) enviados al generador.`, 'success');
+    },
+    sendPostSaleToGenerator() {
+      const selected = orders.filter((o) => selectedIds.has(o.id) && isPostSaleOrder(o));
+      if (!selected.length) return showToast('Selecciona pedidos con cambios o devoluciones.', 'warning');
+      const mapped = selected.map((o) => ({
+        ...o,
+        product: `[${o.postSale.routeAction || 'Postventa'}] ${o.product || (o.postSale.type === 'change' ? 'Cambio' : 'Devolución')}`,
+        notes: [
+          `POSTVENTA: ${o.postSale.type === 'change' ? 'Cambio' : 'Devolución'}`,
+          o.postSale.status ? `Estado: ${o.postSale.status}` : '',
+          o.postSale.resolution ? `Resolver: ${o.postSale.resolution}` : '',
+          o.postSale.notes ? `Notas: ${o.postSale.notes}` : '',
+        ].filter(Boolean).join(' | '),
+        amountStr: o.postSale.type === 'return' ? 'RD$ 0' : o.amountStr,
+      }));
+      ShippingGuideManager.setBatchFromDashboard(mapped);
+      switchTab('generator');
+      showToast(`${mapped.length} caso(s) de postventa enviados a ruta.`, 'success');
+    },
+    deleteSelected() {
+      if (confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.size} pedidos del panel?`)) {
+        orders = orders.filter((o) => !selectedIds.has(o.id));
+        selectedIds.clear();
+        save();
+        renderStats();
+        renderTable();
+      }
+    },
+    clearAllDashboard() {
+      if (confirm('¿Estás seguro de que deseas BORRAR TODOS los pedidos del panel? Esta acción no se puede deshacer.')) {
+        orders = [];
+        selectedIds.clear();
+        save();
+        renderStats();
+        renderTable();
+      }
+    },
+    bulkUpdateStatus(newStatus) {
+      orders.forEach((o) => {
+        if (!selectedIds.has(o.id)) return;
+        o.status = newStatus;
+        syncPostSaleFromStatus(o, newStatus);
+      });
+      save();
+      renderStats();
+      renderTable();
+      showToast('Estados actualizados.', 'success');
+    },
+    async generateSmartWA(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      let phone = String(order.ws || order.phone).replace(/\D/g, '');
+      if (phone.length === 10) phone = `1${phone}`;
+      const text = `Hola ${order.name}, te escribimos de Marketup para confirmar tu pedido ${order.product} con guía #${order.id}. El monto es ${order.amountStr}. ¿Estarás disponible para recibirlo en ${order.address}, ${order.city}? ✨`;
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`, '_blank');
+    },
+    async generateWinBackWA(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      let phone = String(order.ws || order.phone).replace(/\D/g, '');
+      if (phone.length === 10) phone = `1${phone}`;
+      const text = `Hola ${order.name}, te escribimos de Marketup. Si deseas reprogramar tu pedido o gestionar un cambio/devolución, con gusto te ayudamos. ✨`;
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`, '_blank');
+    },
+    async generatePostSaleWA(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      let phone = String(order.ws || order.phone).replace(/\D/g, '');
+      if (phone.length === 10) phone = `1${phone}`;
+      const type = order.postSale.type === 'change' ? 'cambio' : 'devolución';
+      const text = `Hola ${order.name}, te escribimos de Marketup para dar seguimiento a tu ${type} del pedido ${order.id}. Estado actual: ${order.postSale.status || 'recibido'}. ${order.postSale.routeAction ? `Próxima acción: ${order.postSale.routeAction}. ` : ''}Quedamos atentos.`;
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`, '_blank');
+    },
+    async magicPasteAI() {
+      const rawText = document.getElementById('magic-paste-text').value.trim();
+      if (!rawText) return showToast('Pega el texto del cliente primero.', 'warning');
+      const fallback = '{"name":"","phone":"","city":"","address":"","product":"","amount":0}';
+      try {
+        const prompt = `Analiza este mensaje de cliente y devuelve únicamente JSON válido con name, phone, city, address, product y amount. Mensaje: "${rawText}"`;
+        const aiResponse = await GeminiAPI.callLLM(prompt, fallback);
+        const data = JSON.parse(aiResponse.replace(/```json/g, '').replace(/```/g, '').trim());
+        if (data.name) document.getElementById('new-name').value = data.name;
+        if (data.phone) document.getElementById('new-phone').value = String(data.phone).replace(/\D/g, '');
+        if (data.city) document.getElementById('new-city').value = data.city;
+        if (data.address) document.getElementById('new-address').value = data.address;
+        if (data.product) document.getElementById('new-product').value = data.product;
+        if (data.amount) document.getElementById('new-amount').value = data.amount;
+        showToast('Formulario autocompletado con IA ✨', 'success');
+      } catch (e) {
+        showToast('No se pudo extraer la información del texto.', 'error');
+      }
+    },
+    async analyzeRouteWithAI() {
+      const routeOrders = orders.filter((o) => (!norm(o.status).includes('entregado') && !norm(o.status).includes('cancelado')) || o.postSale?.routeAction);
+      if (!routeOrders.length) return showToast('No tienes pedidos pendientes para analizar.', 'warning');
+      const body = document.getElementById('ai-modal-body');
+      body.innerHTML = `<b>Ruta sugerida</b><br><br>Tienes <b>${routeOrders.length}</b> casos entre entregas y postventa. Agrupa primero por zonas y separa: entregas, recogidas de cambios y devoluciones.`;
+      document.getElementById('ai-modal').style.display = 'flex';
+    },
+    async importExcel(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+        const key = (k) => String(k).replace(/^\uFEFF/, '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, '_');
+        rows.forEach((row) => {
+          const c = {};
+          Object.keys(row).forEach((k) => { c[key(k)] = row[k]; });
+          const rawMonto = c.valor_recaudo || c.amount || c.recaudo || c.monto || '0';
+          const numMonto = parseFloat(String(rawMonto).replace(/[^0-9.]/g, '')) || 0;
+          let id = c.pedido || c.id;
+          if (!id) {
+            const maxNum = orders.reduce((m, o) => {
+              const match = String(o.id).match(/PED-?(\d+)/i);
+              return match ? Math.max(m, parseInt(match[1], 10)) : m;
+            }, 0);
+            id = `PED${String(maxNum + 1).padStart(3, '0')}`;
+          }
+          const existing = orders.find((o) => o.id === String(id).trim());
+          const type = norm(c.tipo_postventa || c.postventa_tipo).includes('cambio') ? 'change' : norm(c.tipo_postventa || c.postventa_tipo).includes('devol') ? 'return' : '';
+          const incoming = sanitizeOrder({
+            id,
+            date: c.fecha_creacion || c.fecha || c.date || new Date().toISOString().split('T')[0],
+            deliveryDate: c.fecha_entrega || c.delivery_date || '',
+            name: c.destinatario || c.nombre || c.cliente || 'Sin Nombre',
+            phone: c.telefono || c.celular || '',
+            address: c.direccion || c.calle || '',
+            city: c.ciudad || c.municipio || '',
+            product: c.productos || c.contenido || c.articulo || '',
+            amountStr: String(rawMonto).includes('RD$') ? rawMonto : `RD$ ${numMonto}`,
+            numericAmount: numMonto,
+            status: c.estado || c.status || c.estado_postventa || 'En Proceso',
+            notes: c.notas || c.nota || c.comentario || '',
+            ws: String(c.link_ws || c.whatsapp || c.telefono || '').replace('wa.me/', '').replace(/[^0-9]/g, ''),
+            postSale: {
+              type,
+              status: c.estado_postventa || '',
+              resolution: c.resolucion_postventa || '',
+              routeAction: c.accion_ruta_postventa || '',
+              formUrl: c.formulario_postventa || '',
+              pdfUrl: c.pdf_postventa || '',
+              notes: c.notas_postventa || '',
+              updatedAt: c.fecha_postventa || '',
+            }
+          });
+          if (existing) Object.assign(existing, sanitizeOrder({ ...existing, ...incoming, postSale: { ...existing.postSale, ...incoming.postSale } }));
+          else orders.push(incoming);
+        });
+        save();
+        renderStats();
+        renderTable();
+        showToast('Importación completada.', 'success');
+      } catch (e) {
+        console.error(e);
+        showToast('Error leyendo el archivo.', 'error');
+      }
+      event.target.value = '';
+    },
+    exportExcel() {
+      if (!orders.length) return showToast('No hay datos para exportar.', 'warning');
+      const rows = orders.map((o) => ({
+        'Pedido': o.id,
+        'Fecha Creacion': o.date,
+        'Fecha Entrega': o.deliveryDate,
+        'Destinatario': o.name,
+        'Telefono': o.phone,
+        'Direccion': o.address,
+        'Ciudad': o.city,
+        'Productos': o.product,
+        'Valor Recaudo': o.numericAmount,
+        'Estado': o.status,
+        'Notas': o.notes,
+        'Link WS': o.ws ? `wa.me/${o.ws}` : '',
+        'Tipo Postventa': o.postSale.type === 'change' ? 'Cambio' : o.postSale.type === 'return' ? 'Devolución' : '',
+        'Estado Postventa': o.postSale.status || '',
+        'Resolucion Postventa': o.postSale.resolution || '',
+        'Accion Ruta Postventa': o.postSale.routeAction || '',
+        'Formulario Postventa': o.postSale.formUrl || '',
+        'PDF Postventa': o.postSale.pdfUrl || '',
+        'Notas Postventa': o.postSale.notes || '',
+        'Fecha Postventa': o.postSale.updatedAt || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
+      XLSX.writeFile(wb, `Reporte_Marketup_${new Date().toISOString().split('T')[0]}.xlsx`);
+    },
+    async calculateCostsWithAI() {
+      orders = orders.map((o) => ({ ...o, courierCost: calculateCourierCostLocal(o.city, o.address, rate), aiCalculated: true }));
+      save();
+      renderStats();
+      renderTable();
+      showToast('Tarifas actualizadas.', 'success');
+    },
+    configureAI() {
+      const currentKey = GeminiAPI.getLocalKey();
+      const msg = "Para usar la IA avanzada en tu computadora local, necesitas tu API Key de Google AI Studio.\n\n(Asegúrate de que la clave empiece con 'AIza...')\n\nPégala aquí:";
+      const newKey = prompt(msg, currentKey);
+      if (newKey !== null) GeminiAPI.setLocalKey(newKey.trim());
+    }
+  };
+
+  const reports = {
+    generateReport() {
+      const dateFrom = document.getElementById('rep-date-from').value;
+      const dateTo = document.getElementById('rep-date-to').value;
+      const repType = document.getElementById('report-type').value;
+      const filtered = orders.filter((o) => {
+        const targetDate = (repType === 'postsale' ? (o.postSale?.updatedAt || o.deliveryDate || o.date) : (o.deliveryDate || o.date));
+        if (dateFrom && targetDate < dateFrom) return false;
+        if (dateTo && targetDate > dateTo) return false;
+        if (repType === 'postsale') return isPostSaleOrder(o);
+        return norm(o.status).includes('entregado');
+      });
+      if (!filtered.length) {
+        document.getElementById('report-results').style.display = 'none';
+        document.getElementById('report-empty').style.display = 'flex';
+        return showToast('No hay datos en este rango.', 'warning');
+      }
+      document.getElementById('report-results').style.display = 'block';
+      document.getElementById('report-empty').style.display = 'none';
+      if (repType === 'postsale') {
+        currentReportName = 'Reporte_Postventa';
+        const changes = filtered.filter((o) => o.postSale.type === 'change').length;
+        const returns = filtered.filter((o) => o.postSale.type === 'return').length;
+        const route = filtered.filter((o) => o.postSale.routeAction && !isClosedPostSale(o)).length;
+        document.getElementById('report-title').innerText = `Reporte de Cambios y Devoluciones (${filtered.length} casos)`;
+        document.getElementById('report-summary').innerHTML = `
+          <div class="stat-card" style="border-color:#C7D2FE; background:#EEF2FF;"><div class="stat-icon" style="background:#E0E7FF; color:#3730A3;"><i data-lucide="refresh-cw"></i></div><div class="stat-info"><h3>Cambios</h3><p>${changes}</p></div></div>
+          <div class="stat-card" style="border-color:#FECACA; background:#FEF2F2;"><div class="stat-icon" style="background:#FEE2E2; color:#991B1B;"><i data-lucide="rotate-ccw"></i></div><div class="stat-info"><h3>Devoluciones</h3><p>${returns}</p></div></div>
+          <div class="stat-card" style="border-color:#FED7AA; background:#FFF7ED;"><div class="stat-icon" style="background:#FFEDD5; color:#C2410C;"><i data-lucide="truck"></i></div><div class="stat-info"><h3>Ruta Pendiente</h3><p>${route}</p></div></div>`;
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolución</th></tr>';
+        document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolución')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolución', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
+      } else {
+        currentReportName = 'Reporte_Mensajero';
+        let totalRecaudo = 0;
+        let totalMensajero = 0;
+        document.getElementById('report-title').innerText = `Reporte de Entregados vs Pago Mensajero (${filtered.length} paquetes)`;
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envío</th><th>Neto Empresa</th></tr>';
+        document.getElementById('report-tbody').innerHTML = filtered.map((o) => {
+          const costo = o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate);
+          const neto = o.numericAmount - costo;
+          totalRecaudo += o.numericAmount;
+          totalMensajero += costo;
+          return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td style="font-weight:600; color:#065F46;">${fmt(o.numericAmount)}</td><td style="font-weight:600; color:#4C1D95;">${fmt(costo)}</td><td style="font-weight:700; color:#1E40AF;">${fmt(neto)}</td></tr>`;
+        }).join('');
+        document.getElementById('report-summary').innerHTML = `
+          <div class="stat-card money"><div class="stat-icon"><i data-lucide="dollar-sign"></i></div><div class="stat-info"><h3>Ingresos Brutos</h3><p>${fmt(totalRecaudo)}</p></div></div>
+          <div class="stat-card courier"><div class="stat-icon"><i data-lucide="truck"></i></div><div class="stat-info"><h3>Pago al Mensajero</h3><p>${fmt(totalMensajero)}</p></div></div>
+          <div class="stat-card net"><div class="stat-icon"><i data-lucide="trending-up"></i></div><div class="stat-info"><h3>Ganancia Neta</h3><p>${fmt(totalRecaudo - totalMensajero)}</p></div></div>`;
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaEntrega: o.deliveryDate || o.date || '', Cliente: o.name, Ciudad: o.city, VentaBruta: o.numericAmount, CostoMensajero: o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate), GananciaNeta: o.numericAmount - (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)) }));
+      }
+      if (window.lucide) window.lucide.createIcons();
+    },
+    exportReportExcel() {
+      if (!currentReportData.length) return showToast('Genera un reporte primero para poder exportarlo.', 'warning');
+      const ws = XLSX.utils.json_to_sheet(currentReportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+      XLSX.writeFile(wb, `${currentReportName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showToast('Reporte exportado exitosamente.', 'success');
+    }
+  };
+
+  window.DashboardManager = dashboard;
+  window.ReportsManager = reports;
+
+  window.addEventListener('DOMContentLoaded', () => {
+    ensureUI();
+    load();
+    const rateInput = document.getElementById('dash-rate');
+    if (rateInput) rateInput.value = rate;
+    renderStats();
+    renderTable();
+    if (window.lucide) window.lucide.createIcons();
+  });
+})();
+
+</script>
 </body>
 
 </html>
+
