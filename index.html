@@ -97,7 +97,7 @@
     .flex-line { display: flex; justify-content: space-between; align-items: center; }
     .guide-qr-section { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .guide-qr-meta, .guide-qr-section > div:first-child { flex: 1 1 0; min-width: 0; }
-    .guide-number { font-size: clamp(26px, 4vw, 36px); font-weight: 900; letter-spacing: 0.5px; margin-top: 8px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .guide-number { font-size: clamp(22px, 3.2vw, 32px); font-weight: 900; letter-spacing: 0; margin-top: 8px; line-height: 1; white-space: nowrap; overflow: visible; text-overflow: clip; }
     .qr-image { width: min(220px, 45%); height: auto; aspect-ratio: 1 / 1; max-width: 45%; flex: 0 0 auto; border: 3px solid #000; padding: 2px; background: #fff; image-rendering: pixelated; image-rendering: crisp-edges; }
     .date-box { border: 1px solid black; padding: 2px 6px; display: inline-block; font-weight: bold; }
     .note { font-size: 11px; font-style: italic; white-space: pre-wrap; }
@@ -140,7 +140,7 @@
       .head { font-size: 8px; margin-bottom: 3px; }
       .body-text { font-size: 12px; line-height: 1.2; }
       .small-text { font-size: 10px; line-height: 1.15; }
-      .guide-number { font-size: 34px; margin-top: 4px; }
+      .guide-number { font-size: 26px; margin-top: 4px; white-space: nowrap; overflow: visible; text-overflow: clip; }
       .qr-image { width: 1.8in; height: 1.8in; max-width: none; border-width: 2px; }
       .date-box { padding: 1px 5px; }
       .note { font-size: 10px; line-height: 1.15; }
@@ -1124,16 +1124,19 @@
         let valDecl = String(cleanRow['valor_declarado'] ?? cleanRow['declared_value'] ?? cleanRow['monto'] ?? '').trim();
         let valRec = String(cleanRow['valor_recaudo'] ?? cleanRow['amount'] ?? '').trim();
         if (valDecl) valDecl = formatCurrency(valDecl); if (valRec) valRec = formatCurrency(valRec);
+        const courierName = String(cleanRow['mensajero'] ?? cleanRow['repartidor'] ?? cleanRow['courier'] ?? '').trim();
         return {
           shipperName: String(cleanRow['shipper_name'] ?? defaults.shipperName).trim(),
           shipperAddress: String(cleanRow['shipper_address'] ?? defaults.shipperAddress).trim(),
           recipientName: String(cleanRow['destinatario'] ?? cleanRow['nombre'] ?? cleanRow['recipient_name'] ?? '').trim(),
           recipientPhone: String(cleanRow['telefono'] ?? cleanRow['tel'] ?? cleanRow['recipient_phone'] ?? '').trim(),
           recipientAddress: String(direccion).trim(), recipientCity: String(ciudad).trim(),
-          company: String(cleanRow['empresa'] ?? cleanRow['company'] ?? defaults.company).trim(),
+          company: String(courierName || cleanRow['empresa'] || cleanRow['company'] || defaults.company).trim(),
           declaredValue: valDecl, contentText: String(cleanRow['productos'] ?? cleanRow['contenido'] ?? cleanRow['content_text'] ?? '').trim(),
           amount: valRec, guideNumber: formatGuideNumber(pedido), dateText: String(cleanRow['date_text'] ?? defaults.dateText).trim(),
-          guideNote: String(cleanRow['notas'] ?? cleanRow['nota'] ?? cleanRow['guide_note'] ?? defaults.guideNote).trim()
+          guideNote: String(cleanRow['notas'] ?? cleanRow['nota'] ?? cleanRow['guide_note'] ?? defaults.guideNote).trim(),
+          courierId: String(cleanRow['mensajero_id'] ?? cleanRow['courier_id'] ?? '').trim(),
+          courierName
         };
       };
 
@@ -1160,18 +1163,26 @@
 
       const exportFilledTemplate = () => {
         if (!guideBatch.length) return showToast('No hay guías para exportar.', 'error');
-        const rows = guideBatch.map((item) => ({ 'Pedido': item.guideNumber, 'Destinatario': item.recipientName, 'Telefono': item.recipientPhone, 'Direccion': item.recipientAddress, 'Ciudad': item.recipientCity, 'Productos': item.contentText, 'Empresa': item.company, 'Valor Declarado': item.declaredValue, 'Valor Recaudo': item.amount, 'Notas': item.guideNote }));
+        const rows = guideBatch.map((item) => ({ 'Pedido': item.guideNumber, 'Destinatario': item.recipientName, 'Telefono': item.recipientPhone, 'Direccion': item.recipientAddress, 'Ciudad': item.recipientCity, 'Productos': item.contentText, 'Mensajero': item.courierName || item.company || '', 'Empresa': item.company, 'Valor Declarado': item.declaredValue, 'Valor Recaudo': item.amount, 'Notas': item.guideNote }));
         const worksheet = XLSX.utils.json_to_sheet(rows); const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, 'Pedidos');
         XLSX.writeFile(workbook, 'Plantilla_Marketup_Llena.xlsx'); showToast('Exportación descargada.', 'success');
       };
 
       const downloadTemplate = () => {
-        const worksheet = XLSX.utils.json_to_sheet([{ 'Pedido': 'PED-001', 'Destinatario': 'Cliente Ejemplo', 'Telefono': '8090000001', 'Direccion': 'Calle principal 123', 'Ciudad': 'Santo Domingo', 'Productos': '1 x Smart Ring', 'Empresa': 'Mensajero Privado', 'Valor Declarado': '2445.00', 'Valor Recaudo': '2445.00', 'Notas': 'Llamar antes de entregar' }]);
+        const worksheet = XLSX.utils.json_to_sheet([{ 'Pedido': 'PED-001', 'Destinatario': 'Cliente Ejemplo', 'Telefono': '8090000001', 'Direccion': 'Calle principal 123', 'Ciudad': 'Santo Domingo', 'Productos': '1 x Smart Ring', 'Mensajero': 'Mensajero MarketUP RD', 'Empresa': 'Mensajero Privado', 'Valor Declarado': '2445.00', 'Valor Recaudo': '2445.00', 'Notas': 'Llamar antes de entregar' }]);
         const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Carga'); XLSX.writeFile(workbook, 'Plantilla_Importacion_Guias.xlsx'); showToast('Plantilla descargada.', 'success');
       };
 
       const printCourierList = () => {
         if (!guideBatch.length) return showToast('No hay guías cargadas.', 'error');
+        const selectedCourierId = getEl('dispatch-courier-filter')?.value || 'all';
+        const printableBatch = selectedCourierId === 'all'
+          ? guideBatch
+          : guideBatch.filter((item) => selectedCourierId === '__unassigned__' ? !item.courierId : item.courierId === selectedCourierId);
+        const courierLabel = selectedCourierId === 'all'
+          ? 'Todos los mensajeros'
+          : (window.DashboardManager?.getCourierLabel?.(selectedCourierId) || printableBatch[0]?.courierName || 'Sin asignar');
+        if (!printableBatch.length) return showToast(`No hay guias para ${courierLabel}.`, 'warning');
         if (window.jspdf?.jsPDF) {
           const { jsPDF } = window.jspdf;
           const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -1213,7 +1224,8 @@
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(107, 114, 128);
-            doc.text(`Total: ${guideBatch.length} paquetes`, pageWidth - margin, 27, { align: 'right' });
+            doc.text(`Mensajero: ${sanitizePdfText(courierLabel)}`, margin + 45, 27);
+            doc.text(`Total: ${printableBatch.length} paquetes`, pageWidth - margin, 27, { align: 'right' });
             doc.setDrawColor(229, 231, 235);
             doc.setFillColor(248, 249, 250);
             doc.roundedRect(margin, 32, tableWidth, 9, 1.5, 1.5, 'F');
@@ -1233,7 +1245,7 @@
           drawHeader();
           let y = 47;
 
-          guideBatch.forEach((item, index) => {
+          printableBatch.forEach((item, index) => {
             const whatsappLink = getWhatsAppLinkWithMessage(item);
             const addressText = sanitizePdfText(`${item.recipientAddress || ''}, ${item.recipientCity || ''}`);
             const noteText = sanitizePdfText(`Nota: ${item.guideNote || 'Sin nota'}`);
@@ -1283,18 +1295,19 @@
           });
 
           const fileDate = new Date().toISOString().split('T')[0].replace(/-/g, '');
-          doc.save(`Despacho_${fileDate}.pdf`);
+          const fileCourier = String(courierLabel).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'mensajero';
+          doc.save(`Despacho_${fileCourier}_${fileDate}.pdf`);
           showToast('PDF de despacho generado con enlaces de WhatsApp.', 'success');
           return;
         }
 
         let rowsHTML = '';
-        guideBatch.forEach((item) => {
+        printableBatch.forEach((item) => {
           const instructionNote = escapeHtml(item.guideNote || '').replace(/\n/g, '<br>');
           rowsHTML += `<tr><td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(item.guideNumber)}</strong></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.recipientName)}<br><small style="color:#666;">${escapeHtml(item.recipientPhone)}</small></td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${escapeHtml(item.contentText)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 260px; white-space: normal; line-height: 1.4;">${escapeHtml(item.recipientAddress)}, ${escapeHtml(item.recipientCity)}<div style="margin-top:8px; font-size:12px;"><strong>Nota:</strong> ${instructionNote || '<span style="color:#999;">Sin nota</span>'}</div></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.amount)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: left; min-width: 160px;"><a href="${escapeHtml(getWhatsAppLinkWithMessage(item))}" style="color: #0056b3; font-weight: bold; text-decoration: underline;">Abrir WhatsApp</a></td></tr>`;
         });
         const printWin = window.open('', '_blank'); if (!printWin) return showToast('Desbloquea pop-ups.', 'warning');
-        printWin.document.write(`<!DOCTYPE html><html lang="es"><head><style>body{font-family:sans-serif;margin:40px} table{width:100%;border-collapse:collapse} th{background:#f8f9fa;padding:12px;text-align:left;border-bottom:2px solid #ddd} td{padding:12px;border-bottom:1px solid #ddd}</style></head><body><h2>Listado de Despacho</h2><p>Total Paquetes: ${guideBatch.length}</p><table><thead><tr><th>Guía</th><th>Cliente</th><th>Contenido</th><th>Dirección</th><th>Recaudo</th><th>Acción</th></tr></thead><tbody>${rowsHTML}</tbody></table><script>setTimeout(()=>window.print(), 500);<\/script></body></html>`);
+        printWin.document.write(`<!DOCTYPE html><html lang="es"><head><style>body{font-family:sans-serif;margin:40px} table{width:100%;border-collapse:collapse} th{background:#f8f9fa;padding:12px;text-align:left;border-bottom:2px solid #ddd} td{padding:12px;border-bottom:1px solid #ddd}</style></head><body><h2>Listado de Despacho</h2><p><strong>Mensajero:</strong> ${escapeHtml(courierLabel)}<br><strong>Total Paquetes:</strong> ${printableBatch.length}</p><table><thead><tr><th>Guía</th><th>Cliente</th><th>Contenido</th><th>Dirección</th><th>Recaudo</th><th>Acción</th></tr></thead><tbody>${rowsHTML}</tbody></table><script>setTimeout(()=>window.print(), 500);<\/script></body></html>`);
         printWin.document.close();
       };
 
@@ -1318,8 +1331,9 @@
         guideBatch = dashOrders.map(o => ({
           shipperName: defaults.shipperName, shipperAddress: defaults.shipperAddress,
           recipientName: o.name, recipientPhone: o.phone, recipientAddress: o.address, recipientCity: o.city,
-          company: defaults.company, declaredValue: '', contentText: o.product, amount: o.amountStr,
-          guideNumber: o.id, dateText: o.date || new Date().toISOString().split('T')[0], guideNote: o.notes || defaults.guideNote
+          company: o.courierName || defaults.company, declaredValue: '', contentText: o.product, amount: o.amountStr,
+          guideNumber: o.id, dateText: o.date || new Date().toISOString().split('T')[0], guideNote: o.notes || defaults.guideNote,
+          courierId: o.courierId || '', courierName: o.courierName || ''
         }));
         renderBatch();
       };
@@ -2145,6 +2159,7 @@
         const backupData = {
           dashboard: localStorage.getItem('marketup_dashboard'),
           guideBatch: localStorage.getItem('marketup_guideBatch'),
+          couriers: localStorage.getItem('marketup_couriers'),
           aiKey: localStorage.getItem('marketup_ai_key')
         };
         
@@ -2175,6 +2190,10 @@
             if (backupData.guideBatch !== undefined) {
               if (backupData.guideBatch === null) localStorage.removeItem('marketup_guideBatch');
               else localStorage.setItem('marketup_guideBatch', backupData.guideBatch);
+            }
+            if (backupData.couriers !== undefined) {
+              if (backupData.couriers === null) localStorage.removeItem('marketup_couriers');
+              else localStorage.setItem('marketup_couriers', backupData.couriers);
             }
             if (backupData.aiKey !== undefined) {
               if (backupData.aiKey === null) localStorage.removeItem('marketup_ai_key');
@@ -2226,9 +2245,11 @@
   const isClosedPostSale = (o) => ['Cambio completado', 'Devolución completada', 'Caso cerrado'].includes(o?.postSale?.status || '');
 
   let orders = [];
+  let couriers = [];
   let selectedIds = new Set();
   let rate = 300;
   let currentFilter = 'Todos';
+  let currentCourierFilter = 'all';
   let currentSearch = '';
   let filterDateFrom = '';
   let filterDateTo = '';
@@ -2246,27 +2267,100 @@
     updatedAt: '',
   });
 
-  const sanitizeOrder = (order) => ({
-    id: String(order.id || '').trim(),
-    date: String(order.date || new Date().toISOString().split('T')[0]).trim(),
-    deliveryDate: String(order.deliveryDate || '').trim(),
-    name: String(order.name || 'Sin Nombre').trim(),
-    phone: String(order.phone || '').trim(),
-    address: String(order.address || '').trim(),
-    city: String(order.city || '').trim(),
-    product: String(order.product || '').trim(),
-    amountStr: String(order.amountStr || `RD$ ${Number(order.numericAmount || 0)}`),
-    numericAmount: Number(order.numericAmount || 0),
-    status: String(order.status || 'En Proceso').trim(),
-    ws: String(order.ws || '').trim(),
-    notes: String(order.notes || '').trim(),
-    aiCalculated: !!order.aiCalculated,
-    courierCost: Number(order.courierCost || 0),
-    postSale: { ...getDefaultPostSale(), ...(order.postSale || {}) }
+  const DEFAULT_COURIER = { id: 'default-marketup', name: 'Mensajero MarketUP RD', phone: '', active: true };
+  const makeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const safeFileToken = (value) => norm(value).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'todos';
+  const sanitizeCourier = (courier = {}) => ({
+    id: String(courier.id || makeId('courier')).trim(),
+    name: String(courier.name || courier.nombre || '').trim(),
+    phone: String(courier.phone || courier.telefono || '').trim(),
+    active: courier.active !== false,
   });
+  const ensureDefaultCourier = () => {
+    if (!couriers.length) couriers = [DEFAULT_COURIER];
+    if (!couriers.some((c) => c.id === DEFAULT_COURIER.id)) couriers.unshift(DEFAULT_COURIER);
+  };
+  const loadCouriers = () => {
+    try {
+      const raw = localStorage.getItem('marketup_couriers');
+      couriers = raw ? JSON.parse(raw).map(sanitizeCourier).filter((c) => c.name) : [];
+    } catch (e) {
+      couriers = [];
+    }
+    ensureDefaultCourier();
+  };
+  const saveCouriers = () => localStorage.setItem('marketup_couriers', JSON.stringify(couriers));
+  const getCourier = (id) => couriers.find((c) => c.id === id);
+  const getCourierName = (id) => getCourier(id)?.name || '';
+  const getCourierLabel = (id) => id === 'all' ? 'Todos los mensajeros' : id === '__unassigned__' ? 'Sin asignar' : (getCourierName(id) || 'Sin asignar');
+  const normalizeCourierId = (id) => id === '__unassigned__' ? '' : String(id || '').trim();
+  const findOrCreateCourierByName = (name) => {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return '';
+    const existing = couriers.find((c) => norm(c.name) === norm(cleanName));
+    if (existing) return existing.id;
+    const courier = sanitizeCourier({ name: cleanName });
+    couriers.push(courier);
+    return courier.id;
+  };
+  const resolveCourierId = (order = {}) => {
+    const currentId = String(order.courierId || '').trim();
+    if (currentId && getCourier(currentId)) return currentId;
+    const byName = String(order.courierName || order.mensajero || order.repartidor || '').trim();
+    if (byName) return findOrCreateCourierByName(byName);
+    return couriers[0]?.id || '';
+  };
+  const syncOrderCourierName = (order) => {
+    order.courierId = normalizeCourierId(order.courierId);
+    order.courierName = order.courierId ? getCourierName(order.courierId) : '';
+    return order;
+  };
+  const matchesCourierFilter = (order, filterValue) => {
+    if (!filterValue || filterValue === 'all') return true;
+    if (filterValue === '__unassigned__') return !order.courierId;
+    return order.courierId === filterValue;
+  };
+  const getCourierOptions = (selectedId = '', options = {}) => {
+    const { includeAll = false, allLabel = 'Todos los mensajeros', includeUnassigned = true } = options;
+    const items = [];
+    if (includeAll) items.push(`<option value="all" ${selectedId === 'all' ? 'selected' : ''}>${escapeHtml(allLabel)}</option>`);
+    if (includeUnassigned) items.push(`<option value="__unassigned__" ${!selectedId || selectedId === '__unassigned__' ? 'selected' : ''}>Sin asignar</option>`);
+    couriers.forEach((courier) => {
+      items.push(`<option value="${escapeHtml(courier.id)}" ${selectedId === courier.id ? 'selected' : ''}>${escapeHtml(courier.name)}</option>`);
+    });
+    return items.join('');
+  };
 
-  const save = () => localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
+  const sanitizeOrder = (order) => {
+    const courierId = resolveCourierId(order);
+    return {
+      id: String(order.id || '').trim(),
+      date: String(order.date || new Date().toISOString().split('T')[0]).trim(),
+      deliveryDate: String(order.deliveryDate || '').trim(),
+      name: String(order.name || 'Sin Nombre').trim(),
+      phone: String(order.phone || '').trim(),
+      address: String(order.address || '').trim(),
+      city: String(order.city || '').trim(),
+      product: String(order.product || '').trim(),
+      amountStr: String(order.amountStr || `RD$ ${Number(order.numericAmount || 0)}`),
+      numericAmount: Number(order.numericAmount || 0),
+      status: String(order.status || 'En Proceso').trim(),
+      ws: String(order.ws || '').trim(),
+      notes: String(order.notes || '').trim(),
+      courierId,
+      courierName: courierId ? getCourierName(courierId) : '',
+      aiCalculated: !!order.aiCalculated,
+      courierCost: Number(order.courierCost || 0),
+      postSale: { ...getDefaultPostSale(), ...(order.postSale || {}) }
+    };
+  };
+
+  const save = () => {
+    saveCouriers();
+    localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
+  };
   const load = () => {
+    loadCouriers();
     try {
       const raw = localStorage.getItem('marketup_dashboard');
       if (raw) {
@@ -2277,6 +2371,7 @@
     } catch (e) {
       orders = [];
     }
+    saveCouriers();
   };
 
   const buildReturnFormUrl = (order) => {
@@ -2296,8 +2391,63 @@
     return baseRate;
   };
 
+  const renderCourierControls = () => {
+    const setOptions = (id, selected, options) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = getCourierOptions(selected, options);
+      el.value = selected;
+    };
+    setOptions('dash-courier-filter', currentCourierFilter, { includeAll: true });
+    setOptions('report-courier-filter', document.getElementById('report-courier-filter')?.value || 'all', { includeAll: true });
+    setOptions('dispatch-courier-filter', document.getElementById('dispatch-courier-filter')?.value || 'all', { includeAll: true });
+    setOptions('new-courier', document.getElementById('new-courier')?.value || couriers[0]?.id || '', { includeUnassigned: true });
+
+    const bulk = document.getElementById('bulk-courier-select');
+    if (bulk) {
+      bulk.innerHTML = `<option value="">Asignar mensajero...</option><option value="__unassigned__">Sin asignar</option>${couriers.map((courier) => `<option value="${escapeHtml(courier.id)}">${escapeHtml(courier.name)}</option>`).join('')}`;
+      bulk.value = '';
+    }
+  };
+
+  const renderCourierList = () => {
+    const list = document.getElementById('courier-list');
+    if (!list) return;
+    list.innerHTML = couriers.map((courier) => {
+      const assigned = orders.filter((o) => o.courierId === courier.id).length;
+      return `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:#fff;">
+          <div>
+            <div style="font-weight:800; color:var(--text-main);">${escapeHtml(courier.name)}</div>
+            <div style="font-size:0.78rem; color:var(--text-muted);">${escapeHtml(courier.phone || 'Sin telefono')} - ${assigned} pedido(s) asignado(s)</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button type="button" class="btn btn-outline" style="padding:7px 10px; font-size:0.78rem;" onclick="window.DashboardManager.editCourier('${escapeHtml(courier.id)}')"><i data-lucide="edit-2"></i> Editar</button>
+            <button type="button" class="btn btn-outline" style="padding:7px 10px; font-size:0.78rem; color:var(--danger); border-color:#FCA5A5;" onclick="window.DashboardManager.deleteCourier('${escapeHtml(courier.id)}')"><i data-lucide="trash-2"></i> Eliminar</button>
+          </div>
+        </div>`;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+  };
+
   const ensureUI = () => {
     const actionsWrap = document.getElementById('btn-crear-guias')?.parentElement;
+    if (actionsWrap && !document.getElementById('btn-manage-couriers')) {
+      const btn = document.createElement('button');
+      btn.id = 'btn-manage-couriers';
+      btn.className = 'btn btn-outline';
+      btn.style.padding = '10px 16px';
+      btn.style.fontSize = '0.9rem';
+      btn.style.background = '#F0FDF4';
+      btn.style.color = '#166534';
+      btn.style.borderColor = '#BBF7D0';
+      btn.innerHTML = '<i data-lucide="users"></i> Mensajeros';
+      btn.onclick = () => dashboard.openCourierModal();
+      const newOrderBtn = actionsWrap.querySelector('button[onclick*="openNewOrderModal"]');
+      if (newOrderBtn) newOrderBtn.insertAdjacentElement('afterend', btn);
+      else actionsWrap.prepend(btn);
+    }
+
     if (actionsWrap && !document.getElementById('btn-ruta-postventa')) {
       const btn = document.createElement('button');
       btn.id = 'btn-ruta-postventa';
@@ -2322,6 +2472,20 @@
           bulk.appendChild(opt);
         }
       });
+    }
+
+    if (bulk && !document.getElementById('bulk-courier-select')) {
+      const select = document.createElement('select');
+      select.id = 'bulk-courier-select';
+      select.className = 'btn btn-outline';
+      select.style.cssText = 'background:white; display:none; cursor:pointer; padding:10px 16px; font-size:0.85rem; border-color:#16A34A; color:#166534; font-weight:bold;';
+      select.onchange = function () {
+        if (this.value) {
+          dashboard.bulkAssignCourier(this.value);
+          this.value = '';
+        }
+      };
+      bulk.insertAdjacentElement('afterend', select);
     }
 
     const filterTabs = document.getElementById('dash-filters');
@@ -2351,8 +2515,96 @@
       reportType.appendChild(opt);
     }
 
+    const dateFilterRow = document.getElementById('filter-date-from')?.parentElement;
+    if (dateFilterRow && !document.getElementById('dash-courier-filter')) {
+      const wrap = document.createElement('span');
+      wrap.style.cssText = 'display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap;';
+      wrap.innerHTML = '<span style="font-size:0.8rem; font-weight:600; color:var(--text-muted);"><i data-lucide="users" style="width:14px; height:14px; display:inline; margin-right:4px;"></i> Mensajero:</span><select id="dash-courier-filter" class="status-select" style="border:1px solid var(--border); background:white; padding:6px 10px; min-width:190px;" onchange="window.DashboardManager.filterByCourier(this.value)"></select>';
+      dateFilterRow.insertBefore(wrap, dateFilterRow.lastElementChild);
+    }
+
+    const reportToolbar = document.getElementById('report-type')?.closest('.dash-toolbar')?.querySelector('div[style*="align-items"]');
+    if (reportToolbar && !document.getElementById('report-courier-filter')) {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      group.style.marginBottom = '0';
+      group.style.minWidth = '220px';
+      group.innerHTML = '<label style="font-size:0.75rem; color:var(--text-muted);">Mensajero</label><select id="report-courier-filter" class="status-select" style="border:1px solid var(--border); background:white; padding:8px 12px;" onchange="window.ReportsManager.generateReport()"></select>';
+      const spacer = Array.from(reportToolbar.children).find((el) => el.style?.flex === '1 1 0%') || reportToolbar.querySelector('div[style*="flex: 1"]');
+      reportToolbar.insertBefore(group, spacer || reportToolbar.lastElementChild);
+    }
+
+    const generatorHeaderActions = document.querySelector('#view-generator .gen-header > div:last-child');
+    if (generatorHeaderActions && !document.getElementById('dispatch-courier-filter')) {
+      const select = document.createElement('select');
+      select.id = 'dispatch-courier-filter';
+      select.className = 'btn btn-outline';
+      select.style.cssText = 'background:white; min-width:220px; font-size:0.9rem; padding:12px 14px;';
+      select.title = 'Filtrar listado de despacho por mensajero';
+      generatorHeaderActions.prepend(select);
+    }
+
+    const amountRow = document.getElementById('new-amount')?.closest('.form-row');
+    if (amountRow && !document.getElementById('new-courier')) {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      group.innerHTML = '<label>Mensajero asignado</label><select id="new-courier"></select>';
+      amountRow.insertAdjacentElement('afterend', group);
+    }
+
     const th = document.querySelector('.dash-table thead tr th:last-child');
     if (th) th.style.width = '260px';
+
+    const headerRow = document.querySelector('#view-dashboard .dash-table thead tr');
+    if (headerRow && !document.getElementById('th-courier')) {
+      const courierTh = document.createElement('th');
+      courierTh.id = 'th-courier';
+      courierTh.style.width = '190px';
+      courierTh.textContent = 'Mensajero';
+      const statusTh = Array.from(headerRow.children).find((cell) => cell.textContent.trim().includes('Estado'));
+      headerRow.insertBefore(courierTh, statusTh || headerRow.lastElementChild);
+    }
+
+    if (!document.getElementById('courier-modal')) {
+      const modal = document.createElement('div');
+      modal.id = 'courier-modal';
+      modal.className = 'modal-overlay no-print';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width:720px;">
+          <div class="modal-header">
+            <h3 style="color:var(--text-main); margin:0; display:flex; align-items:center; gap:8px;"><i data-lucide="users" style="color:#16A34A;"></i> Mensajeros</h3>
+            <button class="modal-close" onclick="document.getElementById('courier-modal').style.display='none'"><i data-lucide="x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div class="info-card" style="background:#F0FDF4; border-color:#BBF7D0;">
+              <h4>Registra los mensajeros y asigna pedidos</h4>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin:0;">Cada pedido puede tener su mensajero. Luego los reportes y el listado de despacho se filtran por esa persona.</p>
+            </div>
+            <form id="courier-form" onsubmit="window.DashboardManager.saveCourier(event)" style="margin:16px 0 18px;">
+              <input type="hidden" id="courier-id" value="">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nombre del mensajero *</label>
+                  <input type="text" id="courier-name" required placeholder="Ej: Juan Perez">
+                </div>
+                <div class="form-group">
+                  <label>Telefono</label>
+                  <input type="text" id="courier-phone" placeholder="809-000-0000">
+                </div>
+              </div>
+              <div class="btn-group" style="justify-content:flex-end; margin-bottom:0;">
+                <button type="button" class="btn btn-outline" onclick="window.DashboardManager.resetCourierForm()">Limpiar</button>
+                <button type="submit" class="btn btn-secondary"><i data-lucide="save"></i> Guardar mensajero</button>
+              </div>
+            </form>
+            <div id="courier-list"></div>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+
+    renderCourierControls();
+    renderCourierList();
   };
 
   const renderStats = () => {
@@ -2387,7 +2639,7 @@
   };
 
   const getFilteredOrders = () => orders.filter((o) => {
-    const haystack = norm([o.name, o.id, o.city, o.address, o.product, o.postSale?.status, o.postSale?.notes, o.postSale?.resolution].join(' '));
+    const haystack = norm([o.name, o.id, o.city, o.address, o.product, o.courierName, o.postSale?.status, o.postSale?.notes, o.postSale?.resolution].join(' '));
     const mSearch = haystack.includes(currentSearch);
     const mStatus = currentFilter === 'Todos'
       || (currentFilter === 'Cancelado' && norm(o.status).includes('cancelado'))
@@ -2395,7 +2647,8 @@
       || norm(o.status).includes(norm(currentFilter));
     const targetDate = o.postSale?.updatedAt || o.deliveryDate || o.date;
     const mDate = (!filterDateFrom || targetDate >= filterDateFrom) && (!filterDateTo || targetDate <= filterDateTo);
-    return mSearch && mStatus && mDate;
+    const mCourier = matchesCourierFilter(o, currentCourierFilter);
+    return mSearch && mStatus && mDate && mCourier;
   });
 
   const updateSelectedUI = () => {
@@ -2404,11 +2657,13 @@
     const btnDelete = document.getElementById('btn-eliminar-sel');
     const btnRoute = document.getElementById('btn-ruta-postventa');
     const bulk = document.getElementById('bulk-status-select');
+    const bulkCourier = document.getElementById('bulk-courier-select');
     if (document.getElementById('sel-count')) document.getElementById('sel-count').textContent = count;
     if (document.getElementById('sel-count-del')) document.getElementById('sel-count-del').textContent = count;
     if (btnGuias) btnGuias.style.display = count > 0 ? 'inline-flex' : 'none';
     if (btnDelete) btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
     if (bulk) bulk.style.display = count > 0 ? 'inline-flex' : 'none';
+    if (bulkCourier) bulkCourier.style.display = count > 0 ? 'inline-flex' : 'none';
     if (btnRoute) {
       const selected = orders.filter((o) => selectedIds.has(o.id));
       btnRoute.style.display = count > 0 && selected.some(isPostSaleOrder) ? 'inline-flex' : 'none';
@@ -2437,7 +2692,7 @@
     if (!tbody) return;
     const filtered = getFilteredOrders();
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#6B7280;">No se encontraron pedidos en este rango.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:#6B7280;">No se encontraron pedidos en este rango.</td></tr>';
       return;
     }
     tbody.innerHTML = filtered.map((o) => {
@@ -2462,6 +2717,10 @@
             Envío: ${fmt(o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate))}
             ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
           </div>
+        </td>
+        <td>
+          <select class="status-select" style="border:1px solid var(--border); background:white; max-width:180px;" onchange="DashboardManager.assignCourier('${escapeHtml(o.id)}', this.value)">${getCourierOptions(o.courierId, { includeUnassigned: true })}</select>
+          <div style="font-size:0.7rem; color:${o.courierId ? '#166534' : '#9CA3AF'}; margin-top:4px; font-weight:700;">${escapeHtml(o.courierName || 'Sin asignar')}</div>
         </td>
         <td>
           <select class="status-select" onchange="DashboardManager.updateStatus('${escapeHtml(o.id)}', this.value)">${getStatusOptions(o.status)}</select><br>
@@ -2499,6 +2758,8 @@
   const dashboard = {
     getOrders: () => orders,
     getRate: () => rate,
+    getCouriers: () => couriers,
+    getCourierLabel,
     calculateCourierCostLocal,
     renderTable,
     setFilter(filter, btn) {
@@ -2511,6 +2772,10 @@
       currentSearch = norm(document.getElementById('dash-search')?.value || '');
       filterDateFrom = document.getElementById('filter-date-from')?.value || '';
       filterDateTo = document.getElementById('filter-date-to')?.value || '';
+      renderTable();
+    },
+    filterByCourier(courierId) {
+      currentCourierFilter = courierId || 'all';
       renderTable();
     },
     clearDateFilters() {
@@ -2555,11 +2820,102 @@
       renderStats();
       renderTable();
     },
+    openCourierModal() {
+      renderCourierControls();
+      renderCourierList();
+      dashboard.resetCourierForm();
+      document.getElementById('courier-modal').style.display = 'flex';
+    },
+    resetCourierForm() {
+      if (document.getElementById('courier-id')) document.getElementById('courier-id').value = '';
+      if (document.getElementById('courier-name')) document.getElementById('courier-name').value = '';
+      if (document.getElementById('courier-phone')) document.getElementById('courier-phone').value = '';
+    },
+    editCourier(id) {
+      const courier = getCourier(id);
+      if (!courier) return;
+      document.getElementById('courier-id').value = courier.id;
+      document.getElementById('courier-name').value = courier.name;
+      document.getElementById('courier-phone').value = courier.phone || '';
+      document.getElementById('courier-name').focus();
+    },
+    saveCourier(e) {
+      e.preventDefault();
+      const id = document.getElementById('courier-id').value || makeId('courier');
+      const name = document.getElementById('courier-name').value.trim();
+      const phone = document.getElementById('courier-phone').value.trim();
+      if (!name) return showToast('Escribe el nombre del mensajero.', 'warning');
+      const existing = getCourier(id);
+      if (existing) {
+        existing.name = name;
+        existing.phone = phone;
+      } else {
+        couriers.push(sanitizeCourier({ id, name, phone }));
+      }
+      orders.forEach((order) => {
+        if (order.courierId === id) syncOrderCourierName(order);
+      });
+      save();
+      renderCourierControls();
+      renderCourierList();
+      renderStats();
+      renderTable();
+      dashboard.resetCourierForm();
+      showToast('Mensajero guardado.', 'success');
+    },
+    deleteCourier(id) {
+      const courier = getCourier(id);
+      if (!courier) return;
+      if (id === DEFAULT_COURIER.id) return showToast('El mensajero base se puede editar, pero no eliminar.', 'warning');
+      if (couriers.length <= 1) return showToast('Debe existir al menos un mensajero.', 'warning');
+      const assigned = orders.filter((order) => order.courierId === id).length;
+      if (assigned && !confirm(`Este mensajero tiene ${assigned} pedido(s). Si lo eliminas quedaran sin asignar. Deseas continuar?`)) return;
+      couriers = couriers.filter((item) => item.id !== id);
+      if (currentCourierFilter === id) currentCourierFilter = 'all';
+      orders.forEach((order) => {
+        if (order.courierId === id) {
+          order.courierId = '';
+          order.courierName = '';
+        }
+      });
+      ensureDefaultCourier();
+      save();
+      renderCourierControls();
+      renderCourierList();
+      renderStats();
+      renderTable();
+      showToast('Mensajero eliminado.', 'success');
+    },
+    assignCourier(id, courierId) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      order.courierId = normalizeCourierId(courierId);
+      syncOrderCourierName(order);
+      save();
+      renderStats();
+      renderTable();
+      showToast(order.courierId ? `Pedido ${id} asignado a ${order.courierName}.` : `Pedido ${id} sin mensajero asignado.`, 'success');
+    },
+    bulkAssignCourier(courierId) {
+      const normalized = normalizeCourierId(courierId);
+      const selected = orders.filter((o) => selectedIds.has(o.id));
+      if (!selected.length) return showToast('Selecciona pedidos primero.', 'warning');
+      selected.forEach((order) => {
+        order.courierId = normalized;
+        syncOrderCourierName(order);
+      });
+      save();
+      renderStats();
+      renderTable();
+      showToast(normalized ? `${selected.length} pedido(s) asignado(s) a ${getCourierName(normalized)}.` : `${selected.length} pedido(s) quedaron sin mensajero.`, 'success');
+    },
     openNewOrderModal() {
       document.getElementById('new-order-form')?.reset();
       document.getElementById('edit-order-id').value = '';
       document.getElementById('modal-title-text').innerText = 'Ingresar Nuevo Pedido';
       document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
+      renderCourierControls();
+      if (document.getElementById('new-courier')) document.getElementById('new-courier').value = couriers[0]?.id || '';
       document.getElementById('magic-paste-text').value = '';
       document.getElementById('new-order-modal').style.display = 'flex';
     },
@@ -2574,6 +2930,8 @@
       document.getElementById('new-address').value = order.address;
       document.getElementById('new-product').value = order.product;
       document.getElementById('new-amount').value = order.numericAmount;
+      renderCourierControls();
+      if (document.getElementById('new-courier')) document.getElementById('new-courier').value = order.courierId || '__unassigned__';
       document.getElementById('modal-title-text').innerText = `Editar Pedido (${order.id})`;
       document.getElementById('new-order-modal').style.display = 'flex';
     },
@@ -2588,7 +2946,9 @@
         address: document.getElementById('new-address').value.trim(),
         product: document.getElementById('new-product').value.trim(),
         numericAmount: parseFloat(document.getElementById('new-amount').value) || 0,
+        courierId: normalizeCourierId(document.getElementById('new-courier')?.value || ''),
       };
+      payload.courierName = payload.courierId ? getCourierName(payload.courierId) : '';
       payload.amountStr = `RD$ ${payload.numericAmount}`;
       let ws = payload.phone.replace(/\D/g, '');
       if (ws.length === 10) ws = `1${ws}`;
@@ -2596,6 +2956,7 @@
       if (editId) {
         const order = orders.find((o) => o.id === editId);
         Object.assign(order, payload);
+        syncOrderCourierName(order);
         showToast(`Pedido ${editId} actualizado exitosamente`, 'success');
       } else {
         const maxNum = orders.reduce((m, o) => {
@@ -2817,6 +3178,8 @@
           }
           const existing = orders.find((o) => o.id === String(id).trim());
           const type = norm(c.tipo_postventa || c.postventa_tipo).includes('cambio') ? 'change' : norm(c.tipo_postventa || c.postventa_tipo).includes('devol') ? 'return' : '';
+          const courierName = c.mensajero || c.repartidor || c.courier || c.empresa_mensajero || c.empresa_de_envio || '';
+          const courierId = courierName ? findOrCreateCourierByName(courierName) : (c.mensajero_id || c.courier_id || '');
           const incoming = sanitizeOrder({
             id,
             date: c.fecha_creacion || c.fecha || c.date || new Date().toISOString().split('T')[0],
@@ -2831,6 +3194,8 @@
             status: c.estado || c.status || c.estado_postventa || 'En Proceso',
             notes: c.notas || c.nota || c.comentario || '',
             ws: String(c.link_ws || c.whatsapp || c.telefono || '').replace('wa.me/', '').replace(/[^0-9]/g, ''),
+            courierId,
+            courierName,
             postSale: {
               type,
               status: c.estado_postventa || '',
@@ -2867,6 +3232,9 @@
         'Ciudad': o.city,
         'Productos': o.product,
         'Valor Recaudo': o.numericAmount,
+        'Mensajero': o.courierName || 'Sin asignar',
+        'Mensajero ID': o.courierId || '',
+        'Telefono Mensajero': getCourier(o.courierId)?.phone || '',
         'Estado': o.status,
         'Notas': o.notes,
         'Link WS': o.ws ? `wa.me/${o.ws}` : '',
@@ -2904,10 +3272,13 @@
       const dateFrom = document.getElementById('rep-date-from').value;
       const dateTo = document.getElementById('rep-date-to').value;
       const repType = document.getElementById('report-type').value;
+      const courierFilter = document.getElementById('report-courier-filter')?.value || 'all';
+      const courierLabel = getCourierLabel(courierFilter);
       const filtered = orders.filter((o) => {
         const targetDate = (repType === 'postsale' ? (o.postSale?.updatedAt || o.deliveryDate || o.date) : (o.deliveryDate || o.date));
         if (dateFrom && targetDate < dateFrom) return false;
         if (dateTo && targetDate > dateTo) return false;
+        if (!matchesCourierFilter(o, courierFilter)) return false;
         if (repType === 'postsale') return isPostSaleOrder(o);
         return norm(o.status).includes('entregado');
       });
@@ -2919,11 +3290,11 @@
       document.getElementById('report-results').style.display = 'block';
       document.getElementById('report-empty').style.display = 'none';
       if (repType === 'postsale') {
-        currentReportName = 'Reporte_Postventa';
+        currentReportName = `Reporte_Postventa_${safeFileToken(courierLabel)}`;
         const changes = filtered.filter((o) => o.postSale.type === 'change').length;
         const returns = filtered.filter((o) => o.postSale.type === 'return').length;
         const route = filtered.filter((o) => o.postSale.routeAction && !isClosedPostSale(o)).length;
-        document.getElementById('report-title').innerText = `Reporte de Cambios y Devoluciones (${filtered.length} casos)`;
+        document.getElementById('report-title').innerText = `Reporte de Cambios y Devoluciones - ${courierLabel} (${filtered.length} casos)`;
         document.getElementById('report-summary').innerHTML = `
           <div class="stat-card" style="border-color:#C7D2FE; background:#EEF2FF;"><div class="stat-icon" style="background:#E0E7FF; color:#3730A3;"><i data-lucide="refresh-cw"></i></div><div class="stat-info"><h3>Cambios</h3><p>${changes}</p></div></div>
           <div class="stat-card" style="border-color:#FECACA; background:#FEF2F2;"><div class="stat-icon" style="background:#FEE2E2; color:#991B1B;"><i data-lucide="rotate-ccw"></i></div><div class="stat-info"><h3>Devoluciones</h3><p>${returns}</p></div></div>
@@ -2932,10 +3303,10 @@
         document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolución')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolución', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
       } else {
-        currentReportName = 'Reporte_Mensajero';
+        currentReportName = `Reporte_Mensajero_${safeFileToken(courierLabel)}`;
         let totalRecaudo = 0;
         let totalMensajero = 0;
-        document.getElementById('report-title').innerText = `Reporte de Entregados vs Pago Mensajero (${filtered.length} paquetes)`;
+        document.getElementById('report-title').innerText = `Reporte de Entregados vs Pago Mensajero - ${courierLabel} (${filtered.length} paquetes)`;
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envío</th><th>Neto Empresa</th></tr>';
         document.getElementById('report-tbody').innerHTML = filtered.map((o) => {
           const costo = o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate);
@@ -2948,7 +3319,19 @@
           <div class="stat-card money"><div class="stat-icon"><i data-lucide="dollar-sign"></i></div><div class="stat-info"><h3>Ingresos Brutos</h3><p>${fmt(totalRecaudo)}</p></div></div>
           <div class="stat-card courier"><div class="stat-icon"><i data-lucide="truck"></i></div><div class="stat-info"><h3>Pago al Mensajero</h3><p>${fmt(totalMensajero)}</p></div></div>
           <div class="stat-card net"><div class="stat-icon"><i data-lucide="trending-up"></i></div><div class="stat-info"><h3>Ganancia Neta</h3><p>${fmt(totalRecaudo - totalMensajero)}</p></div></div>`;
-        currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaEntrega: o.deliveryDate || o.date || '', Cliente: o.name, Ciudad: o.city, VentaBruta: o.numericAmount, CostoMensajero: o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate), GananciaNeta: o.numericAmount - (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)) }));
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaEntrega: o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Ciudad: o.city, VentaBruta: o.numericAmount, CostoMensajero: o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate), GananciaNeta: o.numericAmount - (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)) }));
+      }
+      if (repType === 'postsale') {
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Mensajero</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolucion</th></tr>';
+        document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolucion')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolucion', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
+      } else {
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envio</th><th>Neto Empresa</th></tr>';
+        document.getElementById('report-tbody').innerHTML = filtered.map((o) => {
+          const costo = o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate);
+          const neto = o.numericAmount - costo;
+          return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td style="font-weight:600; color:#065F46;">${fmt(o.numericAmount)}</td><td style="font-weight:600; color:#4C1D95;">${fmt(costo)}</td><td style="font-weight:700; color:#1E40AF;">${fmt(neto)}</td></tr>`;
+        }).join('');
       }
       if (window.lucide) window.lucide.createIcons();
     },
@@ -2966,8 +3349,8 @@
   window.ReportsManager = reports;
 
   window.addEventListener('DOMContentLoaded', () => {
-    ensureUI();
     load();
+    ensureUI();
     const rateInput = document.getElementById('dash-rate');
     if (rateInput) rateInput.value = rate;
     renderStats();
