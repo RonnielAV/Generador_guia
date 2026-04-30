@@ -1336,8 +1336,9 @@
         getEl('guideNumber')?.addEventListener('blur', (e) => { setManualGuideNumber(e.target.value); debouncedLoadManualPreview(); });
       };
       
-      const setBatchFromDashboard = (dashOrders) => {
-        guideBatch = dashOrders.map(o => ({
+      const setBatchFromDashboard = (dashOrders, options = {}) => {
+        const append = !!options.append;
+        const incomingBatch = dashOrders.map(o => ({
           shipperName: defaults.shipperName, shipperAddress: defaults.shipperAddress,
           recipientName: o.name, recipientPhone: o.phone, recipientAddress: o.address, recipientCity: o.city,
           company: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '') || defaults.company,
@@ -1345,6 +1346,18 @@
           guideNumber: o.id, dateText: o.date || new Date().toISOString().split('T')[0], guideNote: o.notes || defaults.guideNote,
           courierId: o.courierId || '', courierName: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '')
         }));
+        if (!append) {
+          guideBatch = incomingBatch;
+        } else {
+          // Merge normal + postventa in one dispatch list without duplicated guide numbers.
+          const merged = [...guideBatch];
+          incomingBatch.forEach((item) => {
+            const idx = merged.findIndex((g) => String(g.guideNumber || '').trim() === String(item.guideNumber || '').trim());
+            if (idx >= 0) merged[idx] = item;
+            else merged.push(item);
+          });
+          guideBatch = merged;
+        }
         renderBatch();
       };
 
@@ -3062,9 +3075,9 @@
     sendToGenerator() {
       const selected = orders.filter((o) => selectedIds.has(o.id));
       if (!selected.length) return;
-      ShippingGuideManager.setBatchFromDashboard(selected);
+      ShippingGuideManager.setBatchFromDashboard(selected, { append: true });
       switchTab('generator');
-      showToast(`${selected.length} pedido(s) enviados al generador.`, 'success');
+      showToast(`${selected.length} pedido(s) agregados al lote del generador.`, 'success');
     },
     sendPostSaleToGenerator() {
       const selected = orders.filter((o) => selectedIds.has(o.id) && isPostSaleOrder(o));
@@ -3080,9 +3093,9 @@
         ].filter(Boolean).join(' | '),
         amountStr: o.postSale.type === 'return' ? 'RD$ 0' : o.amountStr,
       }));
-      ShippingGuideManager.setBatchFromDashboard(mapped);
+      ShippingGuideManager.setBatchFromDashboard(mapped, { append: true });
       switchTab('generator');
-      showToast(`${mapped.length} caso(s) de postventa enviados a ruta.`, 'success');
+      showToast(`${mapped.length} caso(s) de postventa agregados al lote de ruta.`, 'success');
     },
     deleteSelected() {
       if (confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.size} pedidos del panel?`)) {
