@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 
@@ -281,7 +280,7 @@
             </label>
             <div style="display:flex; gap:8px;">
               <textarea id="magic-paste-text" rows="2" placeholder="Ej: Hola, mándame un Smart Ring a la Calle Sol #2, Herrera. Soy María 809-555-1234." style="flex:1; border-color: #D8B4FE; font-size: 0.8rem; min-height: 50px;"></textarea>
-              <button type="button" class="btn ai-btn" onclick="window.DashboardManager.magicPasteAI()" id="btn-magic-paste" style="align-self: stretch; padding: 0 16px;">✨ Llenar</button>
+              <button type="button" class="btn ai-btn" onclick="window.DashboardManager.magicPasteSmart()" id="btn-magic-paste" style="align-self: stretch; padding: 0 16px;">✨ Llenar</button>
             </div>
             <p style="font-size: 0.7rem; color: #9333EA; margin-top: 6px; line-height: 1.2;">Pega el mensaje desordenado del cliente y la IA llenará el formulario de abajo automáticamente.</p>
         </div>
@@ -3768,6 +3767,97 @@
       renderStats();
       renderTable();
       showToast('Tarifas actualizadas.', 'success');
+    },
+    async magicPasteSmart() {
+      const rawText = document.getElementById('magic-paste-text')?.value.trim();
+      if (!rawText) return showToast('Pega el texto del cliente primero.', 'warning');
+      const parseLocal = (text) => {
+        const out = { name: '', phone: '', city: '', address: '', product: '', amount: 0 };
+        const raw = String(text || '').replace(/\r/g, '').trim();
+        const cleaned = raw.replace(/\s+/g, ' ').trim();
+        const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+        const phone = cleaned.match(/(?:\+?1[\s-]?)?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{4})/);
+        if (phone) out.phone = `${phone[1]}${phone[2]}${phone[3]}`;
+        const amount = cleaned.match(/(?:RD\$?\s*)([\d.,]+)/i);
+        if (amount) out.amount = Number(String(amount[1]).replace(/,/g, '')) || 0;
+        const nameLine = lines.find((l) => /^(mi nombre es|soy)\b/i.test(l));
+        if (nameLine) out.name = nameLine.replace(/^(mi nombre es|soy)\s*/i, '').replace(/[.!]+$/g, '').trim();
+        const cities = ['Santo Domingo Este', 'Santo Domingo Norte', 'Santo Domingo Oeste', 'Distrito Nacional', 'Santo Domingo'];
+        for (const line of lines) {
+          const cityFound = cities.find((c) => norm(line) === norm(c) || norm(line).includes(norm(c)));
+          if (cityFound) { out.city = cityFound; break; }
+        }
+        const deliveryIdx = lines.findIndex((l) => /datos de entrega|direccion|dirección/i.test(l));
+        if (deliveryIdx >= 0) {
+          const addressLines = [];
+          for (let i = deliveryIdx + 1; i < lines.length; i++) {
+            const ln = lines[i];
+            if (/^(quiero|gracias|confirmar)/i.test(ln)) break;
+            if (cities.some((c) => norm(ln).includes(norm(c)))) continue;
+            addressLines.push(ln);
+          }
+          if (addressLines.length) out.address = addressLines.join(', ');
+        }
+        if (!out.address) {
+          const addrLine = lines.find((l) => /^(av|avenida|calle|c\/|res|urb)/i.test(l));
+          if (addrLine) out.address = addrLine;
+        }
+        const textNorm = norm(cleaned);
+        let best = null;
+        let bestScore = -1;
+        inventory.forEach((item) => {
+          const p = norm(item.product);
+          const tokens = p.split(/[^a-z0-9#]+/).filter((t) => t.length > 1);
+          let score = 0;
+          tokens.forEach((t) => { if (textNorm.includes(t)) score += t.length >= 4 ? 3 : 1; });
+          if (textNorm.includes(p)) score += 10;
+          if (score > bestScore) { bestScore = score; best = item; }
+        });
+        if (best && bestScore > 2) out.product = best.product;
+        return out;
+      };
+      let data = parseLocal(rawText);
+      const hasKey = !!GeminiAPI.getLocalKey();
+      if (hasKey) {
+        try {
+          const fallback = JSON.stringify(data);
+          const prompt = `Analiza este mensaje y devuelve solo JSON válido con name, phone, city, address, product y amount. Mensaje: "${rawText}"`;
+          const aiResponse = await GeminiAPI.callLLM(prompt, fallback);
+          const parsed = JSON.parse(String(aiResponse).replace(/```json/g, '').replace(/```/g, '').trim());
+          if (parsed && typeof parsed === 'object') data = { ...data, ...parsed };
+        } catch (e) {}
+      }
+      const before = [
+        document.getElementById('new-name')?.value || '',
+        document.getElementById('new-phone')?.value || '',
+        document.getElementById('new-city')?.value || '',
+        document.getElementById('new-address')?.value || '',
+        document.getElementById('new-amount')?.value || '',
+        document.getElementById('new-product')?.value || ''
+      ].join('|');
+      if (data.name) document.getElementById('new-name').value = data.name;
+      if (data.phone) document.getElementById('new-phone').value = String(data.phone).replace(/\D/g, '');
+      if (data.city) document.getElementById('new-city').value = data.city;
+      if (data.address) document.getElementById('new-address').value = data.address;
+      if (data.amount) document.getElementById('new-amount').value = data.amount;
+      if (data.product) {
+        const target = inventory.find((item) => norm(item.product).includes(norm(data.product)) || norm(data.product).includes(norm(item.product)));
+        if (target) {
+          renderProductSelector(target.sku);
+          document.getElementById('new-product').value = target.sku;
+          if (document.getElementById('new-sku-preview')) document.getElementById('new-sku-preview').value = target.sku;
+        }
+      }
+      const after = [
+        document.getElementById('new-name')?.value || '',
+        document.getElementById('new-phone')?.value || '',
+        document.getElementById('new-city')?.value || '',
+        document.getElementById('new-address')?.value || '',
+        document.getElementById('new-amount')?.value || '',
+        document.getElementById('new-product')?.value || ''
+      ].join('|');
+      if (before === after) return showToast(hasKey ? 'La IA no detectó datos claros. Prueba con más detalle.' : 'Sin API key: no se pudieron detectar datos suficientes.', 'warning');
+      showToast(hasKey ? 'Formulario autocompletado con IA ✨' : 'Formulario llenado con extracción local.', 'success');
     },
     configureAI() {
       const currentKey = GeminiAPI.getLocalKey();
