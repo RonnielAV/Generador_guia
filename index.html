@@ -443,6 +443,9 @@
       <button class="nav-tab active" onclick="switchTab('dashboard')" id="tab-dashboard">
         <i data-lucide="layout-dashboard"></i> Panel y Excel
       </button>
+      <button class="nav-tab" onclick="switchTab('inventory')" id="tab-inventory">
+        <i data-lucide="boxes"></i> Inventario
+      </button>
       <button class="nav-tab" onclick="switchTab('generator')" id="tab-generator">
         <i data-lucide="file-text"></i> Generador de Guías <span id="gen-badge" style="background:var(--primary); color:white; border-radius:10px; padding:2px 6px; font-size:10px; display:none;">0</span>
       </button>
@@ -601,6 +604,15 @@
       </table>
     </div>
 
+  </div>
+
+  <div id="view-inventory" class="dash-container no-print" style="display: none;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+      <div>
+        <h2 style="font-size: 1.8rem; font-weight: 800; color: var(--text-main); margin:0;">Inventario</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-top:4px;">Control de disponible, reservado y despachado.</p>
+      </div>
+    </div>
   </div>
 
   <!-- =========================================================================
@@ -920,10 +932,12 @@
     // -------------------------------------------------------------
     function switchTab(tabId) {
       document.getElementById('view-dashboard').style.display = tabId === 'dashboard' ? 'block' : 'none';
+      document.getElementById('view-inventory').style.display = tabId === 'inventory' ? 'block' : 'none';
       document.getElementById('view-generator').style.display = tabId === 'generator' ? 'block' : 'none';
       document.getElementById('view-reports').style.display = tabId === 'reports' ? 'block' : 'none';
       
       document.getElementById('tab-dashboard').classList.toggle('active', tabId === 'dashboard');
+      document.getElementById('tab-inventory').classList.toggle('active', tabId === 'inventory');
       document.getElementById('tab-generator').classList.toggle('active', tabId === 'generator');
       document.getElementById('tab-reports').classList.toggle('active', tabId === 'reports');
     }
@@ -2466,8 +2480,8 @@
     sku: String(item.sku || item.SKU || makeId('SKU')).trim(),
     available: Math.max(0, Number(item.available ?? item.disponible ?? 0)),
     reserved: Math.max(0, Number(item.reserved ?? item.reservado ?? 0)),
-    dispatched: Math.max(0, Number(item.dispatched ?? item.total_despachado ?? 0)),
-    physical: Math.max(0, Number(item.physical ?? item.total_fisico ?? item.available ?? 0)),
+    dispatched: Math.max(0, Number(item.dispatched ?? item.total_despachado ?? item.total_despachado_acumulado ?? 0)),
+    physical: Math.max(0, Number(item.physical ?? item.total_fisico ?? item.total_fisico_actual ?? item.available ?? 0)),
     comments: String(item.comments ?? item.comentarios ?? 'Sin comentarios').trim() || 'Sin comentarios',
   });
   const getInventoryItem = (sku) => inventory.find((i) => i.sku === sku);
@@ -2480,6 +2494,11 @@
     }
   };
   const saveInventory = () => localStorage.setItem('marketup_inventory', JSON.stringify(inventory));
+  const syncInventoryPhysical = () => {
+    inventory.forEach((item) => {
+      item.physical = Math.max(0, Number(item.available || 0) + Number(item.reserved || 0));
+    });
+  };
   const reserveInventoryForOrder = (order) => {
     if (!order?.inventorySku || !order?.quantity) return { ok: true };
     const item = getInventoryItem(order.inventorySku);
@@ -2557,7 +2576,10 @@
         <td>${item.dispatched}</td>
         <td>${item.physical}</td>
         <td>${escapeHtml(item.comments || 'Sin comentarios')}</td>
-        <td><button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem;" onclick="window.DashboardManager.adjustInventoryPrompt('${escapeHtml(item.sku)}')">Ajustar</button></td>
+        <td style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem;" onclick="window.DashboardManager.adjustInventoryPrompt('${escapeHtml(item.sku)}')">Ajustar</button>
+          <button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem; border-color:#FECACA; color:#B91C1C;" onclick="window.DashboardManager.deleteInventoryItem('${escapeHtml(item.sku)}')">Eliminar</button>
+        </td>
       </tr>`;
     }).join('');
   };
@@ -2593,6 +2615,7 @@
   };
 
   const save = () => {
+    syncInventoryPhysical();
     saveCouriers();
     saveInventory();
     localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
@@ -2610,6 +2633,7 @@
     } catch (e) {
       orders = [];
     }
+    syncInventoryPhysical();
     saveCouriers();
     saveInventory();
   };
@@ -2854,8 +2878,8 @@
         </div>`;
       document.body.appendChild(modal);
     }
-    const dashboardContainer = document.getElementById('view-dashboard');
-    if (dashboardContainer && !document.getElementById('inventory-panel')) {
+    const inventoryContainer = document.getElementById('view-inventory');
+    if (inventoryContainer && !document.getElementById('inventory-panel')) {
       const panel = document.createElement('div');
       panel.id = 'inventory-panel';
       panel.style.marginTop = '22px';
@@ -2865,8 +2889,15 @@
             <h3 style="font-size:1.25rem; font-weight:800; color:var(--text-main); margin:0;">Inventario</h3>
             <p style="color:var(--text-muted); font-size:0.85rem; margin:3px 0 0;">Control de disponible, reservado y despachado.</p>
           </div>
-          <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.restoreInventorySeed()"><i data-lucide="refresh-ccw"></i> Restablecer Base</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.addInventoryProductPrompt()"><i data-lucide="plus-circle"></i> Agregar producto</button>
+            <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.openInventoryImport()"><i data-lucide="upload"></i> Importar inventario</button>
+            <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.exportInventoryExcel()"><i data-lucide="download"></i> Exportar inventario</button>
+            <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.downloadInventoryTemplate()"><i data-lucide="file-spreadsheet"></i> Plantilla inventario</button>
+            <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.restoreInventorySeed()"><i data-lucide="refresh-ccw"></i> Restablecer base</button>
+          </div>
         </div>
+        <input type="file" id="inventory-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.DashboardManager.importInventoryExcel(event)">
         <div class="table-wrapper">
           <table class="dash-table">
             <thead>
@@ -2884,7 +2915,7 @@
             <tbody id="inventory-tbody"></tbody>
           </table>
         </div>`;
-      dashboardContainer.appendChild(panel);
+      inventoryContainer.appendChild(panel);
     }
 
     renderCourierControls();
@@ -3108,6 +3139,118 @@
       save();
       renderStats();
       renderTable();
+    },
+    openInventoryImport() {
+      const input = document.getElementById('inventory-file-input');
+      if (!input) return;
+      input.click();
+    },
+    addInventoryProductPrompt() {
+      const product = String(prompt('Nombre del producto:', '') || '').trim();
+      if (!product) return;
+      let sku = String(prompt('SKU del producto:', '') || '').trim();
+      if (!sku) sku = makeId('SKU');
+      if (inventory.some((i) => norm(i.sku) === norm(sku))) return showToast('Ese SKU ya existe.', 'warning');
+      const availableRaw = prompt('Cantidad disponible inicial:', '0');
+      if (availableRaw === null) return;
+      const available = Math.max(0, Number(availableRaw) || 0);
+      const comments = String(prompt('Comentarios (opcional):', 'Sin comentarios') || 'Sin comentarios').trim() || 'Sin comentarios';
+      inventory.push(sanitizeInventoryItem({ product, sku, available, reserved: 0, dispatched: 0, physical: available, comments }));
+      save();
+      renderInventoryTable();
+      renderProductSelector(document.getElementById('new-product')?.value || '');
+      showToast('Producto agregado al inventario.', 'success');
+    },
+    deleteInventoryItem(sku) {
+      const item = getInventoryItem(sku);
+      if (!item) return;
+      const used = orders.some((o) => o.inventorySku === sku && o.inventoryState !== 'none');
+      if (used) return showToast('No puedes eliminar un SKU con pedidos activos reservados/despachados.', 'warning');
+      if (!confirm(`¿Eliminar ${item.product} (${item.sku}) del inventario?`)) return;
+      inventory = inventory.filter((i) => i.sku !== sku);
+      save();
+      renderInventoryTable();
+      renderProductSelector(document.getElementById('new-product')?.value || '');
+      showToast('Producto eliminado.', 'success');
+    },
+    async importInventoryExcel(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+        const key = (k) => String(k).replace(/^\uFEFF/, '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, '_');
+        let created = 0;
+        let updated = 0;
+        rows.forEach((row) => {
+          const c = {};
+          Object.keys(row).forEach((k) => { c[key(k)] = row[k]; });
+          const sku = String(c.sku || c.codigo || c.codigo_sku || '').trim();
+          const product = String(c.producto || c.nombre || c.product || '').trim();
+          if (!sku || !product) return;
+          const available = Math.max(0, Number(c.disponible ?? c.available ?? 0));
+          const reserved = Math.max(0, Number(c.reservado ?? c.reserved ?? 0));
+          const dispatched = Math.max(0, Number(c.total_despachado ?? c.despachado ?? c.dispatched ?? 0));
+          const physical = Math.max(0, Number(c.total_fisico ?? c.fisico ?? c.physical ?? (available + reserved)));
+          const comments = String(c.comentarios || c.comments || 'Sin comentarios').trim() || 'Sin comentarios';
+          const current = inventory.find((i) => norm(i.sku) === norm(sku));
+          if (current) {
+            current.product = product;
+            current.available = available;
+            current.reserved = reserved;
+            current.dispatched = dispatched;
+            current.physical = physical;
+            current.comments = comments;
+            updated += 1;
+          } else {
+            inventory.push(sanitizeInventoryItem({ product, sku, available, reserved, dispatched, physical, comments }));
+            created += 1;
+          }
+        });
+        save();
+        renderInventoryTable();
+        renderProductSelector(document.getElementById('new-product')?.value || '');
+        showToast(`Inventario importado. Nuevos: ${created}, actualizados: ${updated}.`, 'success');
+      } catch (e) {
+        console.error(e);
+        showToast('No se pudo importar el inventario.', 'error');
+      }
+      event.target.value = '';
+    },
+    exportInventoryExcel() {
+      if (!inventory.length) return showToast('No hay inventario para exportar.', 'warning');
+      const rows = inventory.map((i) => ({
+        'Producto': i.product,
+        'SKU': i.sku,
+        'Disponible': i.available,
+        'Reservado': i.reserved,
+        'Total Despachado': i.dispatched,
+        'Total Fisico': i.physical,
+        'Comentarios': i.comments || 'Sin comentarios',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+      XLSX.writeFile(wb, `Inventario_Marketup_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showToast('Inventario exportado.', 'success');
+    },
+    downloadInventoryTemplate() {
+      const rows = [{
+        'Producto': 'Polvo para canas y calvicie CASTAÑO CLARO',
+        'SKU': 'NEW-0000000000000-000',
+        'Disponible': 100,
+        'Reservado': 0,
+        'Total Despachado': 0,
+        'Total Fisico': 100,
+        'Comentarios': 'Sin comentarios'
+      }];
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Inventario');
+      XLSX.writeFile(wb, 'Plantilla_Importacion_Inventario_Marketup.xlsx');
+      showToast('Plantilla de inventario descargada.', 'success');
     },
     adjustInventoryPrompt(sku) {
       const item = getInventoryItem(sku);
