@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 
@@ -314,12 +315,24 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Producto(s)</label>
-              <input type="text" id="new-product" placeholder="Ej: 1x Smart Ring">
+              <label>Producto *</label>
+              <select id="new-product" required>
+                <option value="">Selecciona un producto del inventario</option>
+              </select>
             </div>
+            <div class="form-group">
+              <label>Cantidad *</label>
+              <input type="number" id="new-qty" min="1" step="1" value="1" required placeholder="1">
+            </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label>Monto a Cobrar (RD$) *</label>
               <input type="number" id="new-amount" required placeholder="1495">
+            </div>
+            <div class="form-group">
+              <label>SKU (automático)</label>
+              <input type="text" id="new-sku-preview" readonly placeholder="Se llena al elegir producto">
             </div>
           </div>
           <div class="btn-group" style="margin-top: 24px; justify-content: flex-end; margin-bottom: 0;">
@@ -686,6 +699,9 @@
           <p>Marketup Logistics Manager</p>
         </div>
         <div style="display: flex; gap: 12px;">
+          <button onclick="ShippingGuideManager.sendCourierWhatsAppList()" class="btn btn-outline" style="font-size: 1rem; padding: 12px 24px; background:#ECFDF5; color:#065F46; border-color:#A7F3D0;">
+            <i data-lucide="send"></i> Enviar al Mensajero
+          </button>
           <button onclick="ShippingGuideManager.printCourierList()" class="btn btn-secondary" style="font-size: 1rem; padding: 12px 24px;">
             <i data-lucide="clipboard-list"></i> Listado Mensajero
           </button>
@@ -981,7 +997,7 @@
         if (cleanedPhone.length === 10) cleanedPhone = '1' + cleanedPhone;
         if (!cleanedPhone) return '#';
         const message = `¡Hola ${data.recipientName}! Soy ${data.company}\n\nTe escribo para informarte que ya estoy en camino a entregarte tu pedido.\n\n*Detalles de su pedido:*\n- *Guía:* ${data.guideNumber}\n- *Contenido:* ${data.contentText}\n- *Monto a Pagar:* ${data.amount}\n\nPor favor, confírmame si te encuentras disponible para recibirlo en la dirección indicada. ¡Gracias!`;
-        return `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`;
+        return `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
       };
 
       const generateQRImage = (data) => {
@@ -1319,6 +1335,75 @@
         printWin.document.close();
       };
 
+      const sendCourierWhatsAppList = () => {
+        if (!guideBatch.length) return showToast('No hay guias cargadas.', 'error');
+        const selectedCourierId = getEl('dispatch-courier-filter')?.value || 'all';
+        const selectedCourierLabel = selectedCourierId === 'all'
+          ? ''
+          : (window.DashboardManager?.getCourierLabel?.(selectedCourierId) || '').toLowerCase();
+        const filteredBatch = selectedCourierId === 'all'
+          ? guideBatch
+          : guideBatch.filter((item) => {
+              if (selectedCourierId === '__unassigned__') return !item.courierId;
+              if (item.courierId === selectedCourierId) return true;
+              const itemCourierLabel = String(item.courierName || item.company || '').toLowerCase();
+              return !!selectedCourierLabel && itemCourierLabel === selectedCourierLabel;
+            });
+        const courierLabel = selectedCourierId === 'all'
+          ? 'Todos los mensajeros'
+          : (window.DashboardManager?.getCourierLabel?.(selectedCourierId) || filteredBatch[0]?.courierName || 'Sin asignar');
+        if (!filteredBatch.length) return showToast(`No hay guias para ${courierLabel}.`, 'warning');
+        if (selectedCourierId === 'all' || selectedCourierId === '__unassigned__') {
+          return showToast('Selecciona un mensajero especifico para enviar el WhatsApp.', 'warning');
+        }
+
+        const couriers = window.DashboardManager?.getCouriers?.() || [];
+        const courier = couriers.find((c) => c.id === selectedCourierId);
+        let courierPhone = String(courier?.phone || '').replace(/\D/g, '');
+        if (courierPhone.length === 10) courierPhone = `1${courierPhone}`;
+        if (!courierPhone) {
+          const asked = prompt(`No hay telefono guardado para ${courierLabel}. Escribe el telefono del mensajero:`, '');
+          const cleaned = String(asked || '').replace(/\D/g, '');
+          courierPhone = cleaned.length === 10 ? `1${cleaned}` : cleaned;
+        }
+        if (!courierPhone) return showToast('No se pudo enviar sin telefono del mensajero.', 'error');
+
+        const shortWa = (phone) => {
+          let cleanedPhone = String(phone || '').replace(/\D/g, '');
+          if (cleanedPhone.length === 10) cleanedPhone = `1${cleanedPhone}`;
+          return cleanedPhone ? `https://wa.me/${cleanedPhone}` : '';
+        };
+
+        const cleanOneLine = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+        const lines = [
+          `LISTADO DE DESPACHO`,
+          `Mensajero: ${courierLabel}`,
+          `Total guias: ${filteredBatch.length}`,
+          `Fecha: ${new Date().toLocaleDateString('es-DO')}`,
+          '',
+        ];
+        filteredBatch.forEach((item, idx) => {
+          const address = cleanOneLine(`${item.recipientAddress || ''}, ${item.recipientCity || ''}`.replace(/^,\s*/, ''));
+          const amount = cleanOneLine(item.amount || 'RD$ 0');
+          const content = cleanOneLine(item.contentText || 'Sin contenido');
+          const note = cleanOneLine(item.guideNote || 'Sin nota');
+          const clientWa = shortWa(item.recipientPhone) || 'Sin telefono';
+          lines.push(`${idx + 1}) GUIA: ${cleanOneLine(item.guideNumber)}`);
+          lines.push(`Cliente: ${cleanOneLine(item.recipientName)}`);
+          lines.push(`Telefono: ${cleanOneLine(item.recipientPhone) || 'N/D'}`);
+          lines.push(`Contenido: ${content}`);
+          lines.push(`Direccion: ${address || 'N/D'}`);
+          lines.push(`Recaudo: ${amount}`);
+          lines.push(`Nota para mensajero: ${note}`);
+          lines.push(`WhatsApp cliente: ${clientWa}`);
+          lines.push('');
+        });
+
+        const message = lines.join('\n');
+        const target = `https://api.whatsapp.com/send?phone=${courierPhone}&text=${encodeURIComponent(message)}`;
+        window.open(target, '_blank');
+      };
+
       const init = () => {
         const loaded = loadStateFromLocal(); if (!loaded) resetDefaults();
         manualIds.forEach((id) => {
@@ -1341,7 +1426,7 @@
           shipperName: defaults.shipperName, shipperAddress: defaults.shipperAddress,
           recipientName: o.name, recipientPhone: o.phone, recipientAddress: o.address, recipientCity: o.city,
           company: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '') || defaults.company,
-          declaredValue: '', contentText: o.product, amount: o.amountStr,
+          declaredValue: '', contentText: `${Math.max(1, Number(o.quantity || 1))} ${String(o.product || '').trim()}`.trim(), amount: o.amountStr,
           guideNumber: o.id, dateText: o.date || new Date().toISOString().split('T')[0], guideNote: o.notes || defaults.guideNote,
           courierId: o.courierId || '', courierName: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '')
         }));
@@ -1360,7 +1445,7 @@
         renderBatch();
       };
 
-      return { init, importSpreadsheet, exportFilledTemplate, downloadTemplate, addManualGuideToBatch, clearBatch, generateNextManualGuide, resetDefaults, deleteGuide, editGuide, printCourierList, setBatchFromDashboard, optimizeAddressWithAI, debouncedLoadManualPreview };
+      return { init, importSpreadsheet, exportFilledTemplate, downloadTemplate, addManualGuideToBatch, clearBatch, generateNextManualGuide, resetDefaults, deleteGuide, editGuide, printCourierList, sendCourierWhatsAppList, setBatchFromDashboard, optimizeAddressWithAI, debouncedLoadManualPreview };
     })();
 
     document.addEventListener('DOMContentLoaded', ShippingGuideManager.init);
@@ -2182,6 +2267,7 @@
           dashboard: localStorage.getItem('marketup_dashboard'),
           guideBatch: localStorage.getItem('marketup_guideBatch'),
           couriers: localStorage.getItem('marketup_couriers'),
+          inventory: localStorage.getItem('marketup_inventory'),
           aiKey: localStorage.getItem('marketup_ai_key')
         };
         
@@ -2216,6 +2302,10 @@
             if (backupData.couriers !== undefined) {
               if (backupData.couriers === null) localStorage.removeItem('marketup_couriers');
               else localStorage.setItem('marketup_couriers', backupData.couriers);
+            }
+            if (backupData.inventory !== undefined) {
+              if (backupData.inventory === null) localStorage.removeItem('marketup_inventory');
+              else localStorage.setItem('marketup_inventory', backupData.inventory);
             }
             if (backupData.aiKey !== undefined) {
               if (backupData.aiKey === null) localStorage.removeItem('marketup_ai_key');
@@ -2268,6 +2358,7 @@
 
   let orders = [];
   let couriers = [];
+  let inventory = [];
   let selectedIds = new Set();
   let rate = 300;
   let currentFilter = 'Todos';
@@ -2353,8 +2444,129 @@
     return items.join('');
   };
 
+  const INVENTORY_SEED = [
+    { product: 'Polvo para canas y calvicie CASTAÑO CLARO', sku: 'NEW-1777913048470-798', available: 90, reserved: 5, dispatched: 0, physical: 90, comments: 'Sin comentarios' },
+    { product: 'Polvo para canas y calvicie GRIS', sku: 'NEW-1777913044474-272', available: 50, reserved: 0, dispatched: 0, physical: 50, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres ROSE GOLD/DORADO #8', sku: 'NEW-1776866178584-900', available: 2, reserved: 0, dispatched: 0, physical: 2, comments: 'Bajo Stock' },
+    { product: 'Smart Ring para mujeres y hombres PLATEADO/SILVER #9', sku: 'NEW-1776866177358-892', available: 10, reserved: 0, dispatched: 0, physical: 10, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres PLATEADO/SILVER #8', sku: 'NEW-1776866176589-341', available: 26, reserved: 0, dispatched: 0, physical: 26, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres PLATEADO/SILVER #7', sku: 'NEW-1776866176135-131', available: 38, reserved: 0, dispatched: 0, physical: 38, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres NEGRO/BLACK #9', sku: 'NEW-1776866175409-95', available: 12, reserved: 0, dispatched: 0, physical: 12, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres NEGRO/BLACK #8', sku: 'NEW-1776866174690-31', available: 30, reserved: 0, dispatched: 0, physical: 30, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres NEGRO/BLACK #7', sku: 'NEW-1776866173669-219', available: 48, reserved: 0, dispatched: 0, physical: 48, comments: 'Sin comentarios' },
+    { product: 'Polvo para canas y calvicie RUBIO', sku: 'NEW-1774403408472-703', available: 68, reserved: 2, dispatched: 15, physical: 68, comments: 'Sin comentarios' },
+    { product: 'Polvo para canas y calvicie CASTAÑO OSCURO', sku: 'NEW-1774403409202-282', available: 80, reserved: 6, dispatched: 36, physical: 80, comments: 'Sin comentarios' },
+    { product: 'Polvo para canas y calvicie NEGRO', sku: 'NEW-1774403409607-31', available: 248, reserved: 0, dispatched: 33, physical: 248, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres', sku: 'NEW-1772587225847-820', available: 106, reserved: 0, dispatched: 63, physical: 106, comments: 'Sin comentarios' },
+    { product: 'Smart Ring para mujeres y hombres ROSE GOLD/DORADO #9', sku: 'NEW-1776866179198-845', available: 0, reserved: 0, dispatched: 0, physical: 0, comments: 'Agotado' },
+    { product: 'Smart Ring para mujeres y hombres ROSE GOLD/DORADO #7', sku: 'NEW-1776866177970-475', available: 0, reserved: 0, dispatched: 0, physical: 0, comments: 'Agotado' },
+  ];
+  const sanitizeInventoryItem = (item = {}) => ({
+    product: String(item.product || item.nombre || '').trim(),
+    sku: String(item.sku || item.SKU || makeId('SKU')).trim(),
+    available: Math.max(0, Number(item.available ?? item.disponible ?? 0)),
+    reserved: Math.max(0, Number(item.reserved ?? item.reservado ?? 0)),
+    dispatched: Math.max(0, Number(item.dispatched ?? item.total_despachado ?? 0)),
+    physical: Math.max(0, Number(item.physical ?? item.total_fisico ?? item.available ?? 0)),
+    comments: String(item.comments ?? item.comentarios ?? 'Sin comentarios').trim() || 'Sin comentarios',
+  });
+  const getInventoryItem = (sku) => inventory.find((i) => i.sku === sku);
+  const loadInventory = () => {
+    try {
+      const raw = localStorage.getItem('marketup_inventory');
+      inventory = raw ? JSON.parse(raw).map(sanitizeInventoryItem).filter((i) => i.product && i.sku) : INVENTORY_SEED.map(sanitizeInventoryItem);
+    } catch (e) {
+      inventory = INVENTORY_SEED.map(sanitizeInventoryItem);
+    }
+  };
+  const saveInventory = () => localStorage.setItem('marketup_inventory', JSON.stringify(inventory));
+  const reserveInventoryForOrder = (order) => {
+    if (!order?.inventorySku || !order?.quantity) return { ok: true };
+    const item = getInventoryItem(order.inventorySku);
+    if (!item) return { ok: false, reason: 'Producto no encontrado en inventario.' };
+    const qty = Math.max(1, Number(order.quantity) || 1);
+    if (item.available < qty) return { ok: false, reason: `Stock insuficiente para ${item.product}. Disponible: ${item.available}.` };
+    item.available -= qty;
+    item.reserved += qty;
+    order.inventoryState = 'reserved';
+    return { ok: true };
+  };
+  const releaseReservedInventoryForOrder = (order) => {
+    if (!order?.inventorySku || !order?.quantity || order.inventoryState !== 'reserved') return;
+    const item = getInventoryItem(order.inventorySku);
+    if (!item) return;
+    const qty = Math.max(1, Number(order.quantity) || 1);
+    item.reserved = Math.max(0, item.reserved - qty);
+    item.available += qty;
+    order.inventoryState = 'none';
+  };
+  const dispatchReservedInventoryForOrder = (order) => {
+    if (!order?.inventorySku || !order?.quantity || order.inventoryState !== 'reserved') return;
+    const item = getInventoryItem(order.inventorySku);
+    if (!item) return;
+    const qty = Math.max(1, Number(order.quantity) || 1);
+    item.reserved = Math.max(0, item.reserved - qty);
+    item.dispatched += qty;
+    order.inventoryState = 'dispatched';
+  };
+  const rollbackDispatchedInventoryForOrder = (order) => {
+    if (!order?.inventorySku || !order?.quantity || order.inventoryState !== 'dispatched') return;
+    const item = getInventoryItem(order.inventorySku);
+    if (!item) return;
+    const qty = Math.max(1, Number(order.quantity) || 1);
+    item.dispatched = Math.max(0, item.dispatched - qty);
+    item.available += qty;
+    order.inventoryState = 'none';
+  };
+  const refreshInventoryByStatus = (order, previousStatus, nextStatus) => {
+    const prevDelivered = norm(previousStatus).includes('entregado');
+    const nextDelivered = norm(nextStatus).includes('entregado');
+    const nextCanceled = norm(nextStatus).includes('cancelado');
+    if (!prevDelivered && nextDelivered) dispatchReservedInventoryForOrder(order);
+    else if (prevDelivered && !nextDelivered) rollbackDispatchedInventoryForOrder(order);
+    else if (!prevDelivered && nextCanceled) releaseReservedInventoryForOrder(order);
+  };
+  const getProductOptions = (selectedSku = '') => {
+    const opts = ['<option value="">Selecciona un producto del inventario</option>'];
+    inventory.forEach((item) => {
+      const low = item.available <= 2 ? ' (Bajo)' : '';
+      const sold = item.available <= 0 ? ' (Agotado)' : '';
+      const label = `${item.product} | ${item.sku} | Disp: ${item.available}${sold || low}`;
+      opts.push(`<option value="${escapeHtml(item.sku)}" ${selectedSku === item.sku ? 'selected' : ''}>${escapeHtml(label)}</option>`);
+    });
+    return opts.join('');
+  };
+  const renderProductSelector = (selectedSku = '') => {
+    const sel = document.getElementById('new-product');
+    if (!sel) return;
+    sel.innerHTML = getProductOptions(selectedSku);
+    sel.value = selectedSku;
+    const skuPreview = document.getElementById('new-sku-preview');
+    if (skuPreview) skuPreview.value = selectedSku || '';
+  };
+  const renderInventoryTable = () => {
+    const tbody = document.getElementById('inventory-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = inventory.map((item) => {
+      const status = item.available <= 0 ? '<span style="color:#991B1B;font-weight:700;">Agotado</span>' : (item.available <= 2 ? '<span style="color:#B45309;font-weight:700;">Bajo Stock</span>' : '');
+      return `<tr>
+        <td style="font-weight:700;">${escapeHtml(item.product)} ${status}</td>
+        <td><code>${escapeHtml(item.sku)}</code></td>
+        <td style="font-weight:700; color:${item.available <= 2 ? '#B45309' : '#065F46'};">${item.available}</td>
+        <td>${item.reserved}</td>
+        <td>${item.dispatched}</td>
+        <td>${item.physical}</td>
+        <td>${escapeHtml(item.comments || 'Sin comentarios')}</td>
+        <td><button class="btn btn-outline" style="padding:6px 10px; font-size:0.75rem;" onclick="window.DashboardManager.adjustInventoryPrompt('${escapeHtml(item.sku)}')">Ajustar</button></td>
+      </tr>`;
+    }).join('');
+  };
+
   const sanitizeOrder = (order) => {
     const courierId = resolveCourierId(order);
+    const productName = String(order.product || '').trim();
+    const invMatch = inventory.find((i) => norm(i.product) === norm(productName));
+    const normalizedSku = String(order.inventorySku || '').trim() || (invMatch?.sku || '');
     return {
       id: String(order.id || '').trim(),
       date: String(order.date || new Date().toISOString().split('T')[0]).trim(),
@@ -2363,12 +2575,15 @@
       phone: String(order.phone || '').trim(),
       address: String(order.address || '').trim(),
       city: String(order.city || '').trim(),
-      product: String(order.product || '').trim(),
+      product: productName,
       amountStr: String(order.amountStr || `RD$ ${Number(order.numericAmount || 0)}`),
       numericAmount: Number(order.numericAmount || 0),
       status: String(order.status || 'En Proceso').trim(),
       ws: String(order.ws || '').trim(),
       notes: String(order.notes || '').trim(),
+      inventorySku: normalizedSku,
+      quantity: Math.max(1, Number(order.quantity || 1)),
+      inventoryState: String(order.inventoryState || 'none'),
       courierId,
       courierName: courierId ? getCourierName(courierId) : '',
       aiCalculated: !!order.aiCalculated,
@@ -2379,10 +2594,12 @@
 
   const save = () => {
     saveCouriers();
+    saveInventory();
     localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
   };
   const load = () => {
     loadCouriers();
+    loadInventory();
     try {
       const raw = localStorage.getItem('marketup_dashboard');
       if (raw) {
@@ -2394,6 +2611,7 @@
       orders = [];
     }
     saveCouriers();
+    saveInventory();
   };
 
   const buildReturnFormUrl = (order) => {
@@ -2573,6 +2791,18 @@
       group.innerHTML = '<label>Mensajero asignado</label><select id="new-courier"></select>';
       amountRow.insertAdjacentElement('afterend', group);
     }
+    if (document.getElementById('new-product') && !document.getElementById('new-product').dataset.inventoryBound) {
+      document.getElementById('new-product').addEventListener('change', (e) => {
+        const sku = e.target.value || '';
+        const item = getInventoryItem(sku);
+        const skuPreview = document.getElementById('new-sku-preview');
+        if (skuPreview) skuPreview.value = sku;
+        if (item && (!document.getElementById('new-qty').value || Number(document.getElementById('new-qty').value) < 1)) {
+          document.getElementById('new-qty').value = 1;
+        }
+      });
+      document.getElementById('new-product').dataset.inventoryBound = '1';
+    }
 
     const th = document.querySelector('.dash-table thead tr th:last-child');
     if (th) th.style.width = '260px';
@@ -2624,9 +2854,43 @@
         </div>`;
       document.body.appendChild(modal);
     }
+    const dashboardContainer = document.getElementById('view-dashboard');
+    if (dashboardContainer && !document.getElementById('inventory-panel')) {
+      const panel = document.createElement('div');
+      panel.id = 'inventory-panel';
+      panel.style.marginTop = '22px';
+      panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
+          <div>
+            <h3 style="font-size:1.25rem; font-weight:800; color:var(--text-main); margin:0;">Inventario</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:3px 0 0;">Control de disponible, reservado y despachado.</p>
+          </div>
+          <button class="btn btn-outline" style="background:white;" onclick="window.DashboardManager.restoreInventorySeed()"><i data-lucide="refresh-ccw"></i> Restablecer Base</button>
+        </div>
+        <div class="table-wrapper">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>SKU</th>
+                <th>Disponible</th>
+                <th>Reservado</th>
+                <th>Total Despachado</th>
+                <th>Total Físico</th>
+                <th>Comentarios</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody"></tbody>
+          </table>
+        </div>`;
+      dashboardContainer.appendChild(panel);
+    }
 
     renderCourierControls();
     renderCourierList();
+    renderProductSelector(document.getElementById('new-product')?.value || '');
+    renderInventoryTable();
   };
 
   const renderStats = () => {
@@ -2825,8 +3089,10 @@
     updateStatus(id, newStatus) {
       const order = orders.find((o) => o.id === id);
       if (!order) return;
+      const prevStatus = order.status;
       order.status = newStatus;
       syncPostSaleFromStatus(order, newStatus);
+      refreshInventoryByStatus(order, prevStatus, newStatus);
       if (newStatus === 'Pendiente') {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -2835,12 +3101,34 @@
       save();
       renderStats();
       renderTable();
+      renderInventoryTable();
     },
     updateRate(val) {
       rate = Number(val) || 0;
       save();
       renderStats();
       renderTable();
+    },
+    adjustInventoryPrompt(sku) {
+      const item = getInventoryItem(sku);
+      if (!item) return;
+      const raw = prompt(`Ajustar disponible para:\n${item.product}\nSKU: ${item.sku}\nDisponible actual: ${item.available}\n\nEscribe el nuevo disponible:`, String(item.available));
+      if (raw === null) return;
+      const next = Math.max(0, Number(raw));
+      if (!Number.isFinite(next)) return showToast('Valor inválido.', 'error');
+      item.available = next;
+      save();
+      renderInventoryTable();
+      renderProductSelector(document.getElementById('new-product')?.value || '');
+      showToast('Inventario actualizado.', 'success');
+    },
+    restoreInventorySeed() {
+      if (!confirm('Esto reemplazará el inventario actual por la base inicial. ¿Deseas continuar?')) return;
+      inventory = INVENTORY_SEED.map(sanitizeInventoryItem);
+      save();
+      renderInventoryTable();
+      renderProductSelector(document.getElementById('new-product')?.value || '');
+      showToast('Inventario restablecido.', 'success');
     },
     openCourierModal() {
       renderCourierControls();
@@ -2936,6 +3224,9 @@
       document.getElementById('edit-order-id').value = '';
       document.getElementById('modal-title-text').innerText = 'Ingresar Nuevo Pedido';
       document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('new-qty').value = 1;
+      document.getElementById('new-sku-preview').value = '';
+      renderProductSelector('');
       renderCourierControls();
       if (document.getElementById('new-courier')) document.getElementById('new-courier').value = couriers[0]?.id || '';
       document.getElementById('magic-paste-text').value = '';
@@ -2950,7 +3241,10 @@
       document.getElementById('new-phone').value = order.phone;
       document.getElementById('new-city').value = order.city;
       document.getElementById('new-address').value = order.address;
-      document.getElementById('new-product').value = order.product;
+      renderProductSelector(order.inventorySku || '');
+      document.getElementById('new-product').value = order.inventorySku || '';
+      document.getElementById('new-sku-preview').value = order.inventorySku || '';
+      document.getElementById('new-qty').value = Math.max(1, Number(order.quantity || 1));
       document.getElementById('new-amount').value = order.numericAmount;
       renderCourierControls();
       if (document.getElementById('new-courier')) document.getElementById('new-courier').value = order.courierId || '__unassigned__';
@@ -2960,13 +3254,19 @@
     saveNewOrder(e) {
       e.preventDefault();
       const editId = document.getElementById('edit-order-id').value;
+      const selectedSku = String(document.getElementById('new-product').value || '').trim();
+      const selectedItem = getInventoryItem(selectedSku);
+      const qty = Math.max(1, Number(document.getElementById('new-qty').value || 1));
+      if (!selectedItem) return showToast('Debes seleccionar un producto real del inventario.', 'warning');
       const payload = {
         date: document.getElementById('new-date').value,
         name: document.getElementById('new-name').value.trim(),
         phone: document.getElementById('new-phone').value.trim(),
         city: document.getElementById('new-city').value.trim(),
         address: document.getElementById('new-address').value.trim(),
-        product: document.getElementById('new-product').value.trim(),
+        product: selectedItem.product,
+        inventorySku: selectedItem.sku,
+        quantity: qty,
         numericAmount: parseFloat(document.getElementById('new-amount').value) || 0,
         courierId: normalizeCourierId(document.getElementById('new-courier')?.value || ''),
       };
@@ -2977,7 +3277,22 @@
       payload.ws = ws;
       if (editId) {
         const order = orders.find((o) => o.id === editId);
+        if (!order) return;
+        const snapshot = JSON.parse(JSON.stringify(order));
+        releaseReservedInventoryForOrder(order);
+        rollbackDispatchedInventoryForOrder(order);
         Object.assign(order, payload);
+        const reserveResult = reserveInventoryForOrder(order);
+        if (!reserveResult.ok) {
+          Object.assign(order, snapshot);
+          if (snapshot.inventoryState === 'reserved') reserveInventoryForOrder(order);
+          if (snapshot.inventoryState === 'dispatched') {
+            reserveInventoryForOrder(order);
+            dispatchReservedInventoryForOrder(order);
+          }
+          renderInventoryTable();
+          return showToast(reserveResult.reason, 'error');
+        }
         syncOrderCourierName(order);
         showToast(`Pedido ${editId} actualizado exitosamente`, 'success');
       } else {
@@ -2985,12 +3300,16 @@
           const match = String(o.id).match(/PED-?(\d+)/i);
           return match ? Math.max(m, parseInt(match[1], 10)) : m;
         }, 0);
-        orders.unshift(sanitizeOrder({ ...payload, id: `PED${String(maxNum + 1).padStart(3, '0')}`, status: 'En Proceso', notes: '' }));
+        const newOrder = sanitizeOrder({ ...payload, id: `PED${String(maxNum + 1).padStart(3, '0')}`, status: 'En Proceso', notes: '', inventoryState: 'none' });
+        const reserveResult = reserveInventoryForOrder(newOrder);
+        if (!reserveResult.ok) return showToast(reserveResult.reason, 'error');
+        orders.unshift(newOrder);
         showToast('Pedido creado exitosamente', 'success');
       }
       save();
       renderStats();
       renderTable();
+      renderInventoryTable();
       document.getElementById('new-order-modal').style.display = 'none';
       document.getElementById('new-order-form').reset();
     },
@@ -3098,31 +3417,44 @@
     },
     deleteSelected() {
       if (confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.size} pedidos del panel?`)) {
+        orders.filter((o) => selectedIds.has(o.id)).forEach((order) => {
+          releaseReservedInventoryForOrder(order);
+          rollbackDispatchedInventoryForOrder(order);
+        });
         orders = orders.filter((o) => !selectedIds.has(o.id));
         selectedIds.clear();
         save();
         renderStats();
         renderTable();
+        renderInventoryTable();
       }
     },
     clearAllDashboard() {
       if (confirm('¿Estás seguro de que deseas BORRAR TODOS los pedidos del panel? Esta acción no se puede deshacer.')) {
+        orders.forEach((order) => {
+          releaseReservedInventoryForOrder(order);
+          rollbackDispatchedInventoryForOrder(order);
+        });
         orders = [];
         selectedIds.clear();
         save();
         renderStats();
         renderTable();
+        renderInventoryTable();
       }
     },
     bulkUpdateStatus(newStatus) {
       orders.forEach((o) => {
         if (!selectedIds.has(o.id)) return;
+        const prevStatus = o.status;
         o.status = newStatus;
         syncPostSaleFromStatus(o, newStatus);
+        refreshInventoryByStatus(o, prevStatus, newStatus);
       });
       save();
       renderStats();
       renderTable();
+      renderInventoryTable();
       showToast('Estados actualizados.', 'success');
     },
     async generateSmartWA(id) {
@@ -3162,7 +3494,14 @@
         if (data.phone) document.getElementById('new-phone').value = String(data.phone).replace(/\D/g, '');
         if (data.city) document.getElementById('new-city').value = data.city;
         if (data.address) document.getElementById('new-address').value = data.address;
-        if (data.product) document.getElementById('new-product').value = data.product;
+        if (data.product) {
+          const target = inventory.find((item) => norm(item.product).includes(norm(data.product)) || norm(data.product).includes(norm(item.product)));
+          if (target) {
+            renderProductSelector(target.sku);
+            document.getElementById('new-product').value = target.sku;
+            if (document.getElementById('new-sku-preview')) document.getElementById('new-sku-preview').value = target.sku;
+          }
+        }
         if (data.amount) document.getElementById('new-amount').value = data.amount;
         showToast('Formulario autocompletado con IA ✨', 'success');
       } catch (e) {
@@ -3211,6 +3550,8 @@
             address: c.direccion || c.calle || '',
             city: c.ciudad || c.municipio || '',
             product: c.productos || c.contenido || c.articulo || '',
+            inventorySku: c.sku || c.product_sku || '',
+            quantity: Number(c.cantidad || c.qty || 1) || 1,
             amountStr: String(rawMonto).includes('RD$') ? rawMonto : `RD$ ${numMonto}`,
             numericAmount: numMonto,
             status: c.estado || c.status || c.estado_postventa || 'En Proceso',
@@ -3235,6 +3576,8 @@
         save();
         renderStats();
         renderTable();
+        renderInventoryTable();
+        renderProductSelector(document.getElementById('new-product')?.value || '');
         showToast('Importación completada.', 'success');
       } catch (e) {
         console.error(e);
@@ -3253,6 +3596,8 @@
         'Direccion': o.address,
         'Ciudad': o.city,
         'Productos': o.product,
+        'SKU': o.inventorySku || '',
+        'Cantidad': o.quantity || 1,
         'Valor Recaudo': o.numericAmount,
         'Mensajero': o.courierName || 'Sin asignar',
         'Mensajero ID': o.courierId || '',
