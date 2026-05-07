@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 
@@ -632,7 +633,7 @@
           <select id="report-type" class="status-select" style="border: 1px solid var(--border); background: white; padding: 8px 12px;">
             <option value="courier">Entregados vs Pago Mensajero</option>
             <option value="postsale">Cambios y devoluciones</option>
-            <option value="sales" disabled>Ventas Generales (Próximamente)</option>
+            <option value="sales">Ventas Generales</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
@@ -687,6 +688,9 @@
       <div class="btn-group">
         <button onclick="BackupManager.exportBackup()" class="btn btn-secondary" style="padding: 10px 20px;">
           <i data-lucide="download-cloud"></i> Descargar Respaldo (.json)
+        </button>
+        <button onclick="window.DashboardManager.exportAuditExcel()" class="btn btn-outline" style="padding: 10px 20px; background: white;">
+          <i data-lucide="file-text"></i> Exportar Auditoría
         </button>
         <div class="btn btn-outline btn-file" style="background: white; padding: 10px 20px;">
           <i data-lucide="upload-cloud"></i> Restaurar Respaldo
@@ -2375,6 +2379,7 @@
   const isPostSaleStatus = (s) => POST_SALE_STATUSES.includes(s);
   const isPostSaleOrder = (o) => !!(o?.postSale?.type || o?.postSale?.status || o?.postSale?.routeAction);
   const isClosedPostSale = (o) => ['Cambio completado', 'Devolución completada', 'Caso cerrado'].includes(o?.postSale?.status || '');
+  const getDefaultSettlement = () => ({ status: 'Pendiente', paidAmount: 0, date: '', note: '' });
 
   let orders = [];
   let couriers = [];
@@ -2388,6 +2393,7 @@
   let filterDateTo = '';
   let currentReportData = [];
   let currentReportName = 'Reporte';
+  let auditLog = [];
 
   const getDefaultPostSale = () => ({
     type: '',
@@ -2500,6 +2506,29 @@
     }
   };
   const saveInventory = () => localStorage.setItem('marketup_inventory', JSON.stringify(inventory));
+  const loadAudit = () => {
+    try {
+      const raw = localStorage.getItem('marketup_audit');
+      auditLog = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(auditLog)) auditLog = [];
+    } catch (e) {
+      auditLog = [];
+    }
+  };
+  const saveAudit = () => {
+    if (!Array.isArray(auditLog)) auditLog = [];
+    if (auditLog.length > 1200) auditLog = auditLog.slice(0, 1200);
+    localStorage.setItem('marketup_audit', JSON.stringify(auditLog));
+  };
+  const addAudit = (action, detail = '', orderId = '') => {
+    auditLog.unshift({
+      at: new Date().toISOString(),
+      action: String(action || '').trim(),
+      detail: String(detail || '').trim(),
+      orderId: String(orderId || '').trim(),
+    });
+    saveAudit();
+  };
   const syncInventoryPhysical = () => {
     inventory.forEach((item) => {
       item.physical = Math.max(0, Number(item.available || 0) + Number(item.reserved || 0));
@@ -2616,7 +2645,8 @@
       courierName: courierId ? getCourierName(courierId) : '',
       aiCalculated: !!order.aiCalculated,
       courierCost: Number(order.courierCost || 0),
-      postSale: { ...getDefaultPostSale(), ...(order.postSale || {}) }
+      postSale: { ...getDefaultPostSale(), ...(order.postSale || {}) },
+      settlement: { ...getDefaultSettlement(), ...(order.settlement || {}) }
     };
   };
 
@@ -2624,11 +2654,13 @@
     syncInventoryPhysical();
     saveCouriers();
     saveInventory();
+    saveAudit();
     localStorage.setItem('marketup_dashboard', JSON.stringify({ orders, rate }));
   };
   const load = () => {
     loadCouriers();
     loadInventory();
+    loadAudit();
     try {
       const raw = localStorage.getItem('marketup_dashboard');
       if (raw) {
@@ -2642,6 +2674,7 @@
     syncInventoryPhysical();
     saveCouriers();
     saveInventory();
+    saveAudit();
   };
 
   const buildReturnFormUrl = (order) => {
@@ -2955,6 +2988,13 @@
     if (s.includes('cancelado')) return '<span class="status-badge" style="background:#FEE2E2; color:#991B1B;">Cancelado</span>';
     return `<span class="status-badge" style="background:#FEF3C7; color:#92400E;">${escapeHtml(status)}</span>`;
   };
+  const getSettlementBadgeHTML = (settlement = {}) => {
+    const s = norm(settlement.status || 'pendiente');
+    if (s.includes('liquidado')) return '<span class="status-badge" style="background:#D1FAE5; color:#065F46;">Cobro: Liquidado</span>';
+    if (s.includes('parcial')) return '<span class="status-badge" style="background:#FEF3C7; color:#92400E;">Cobro: Parcial</span>';
+    if (s.includes('faltante')) return '<span class="status-badge" style="background:#FEE2E2; color:#991B1B;">Cobro: Faltante</span>';
+    return '<span class="status-badge" style="background:#E5E7EB; color:#374151;">Cobro: Pendiente</span>';
+  };
 
   const getStatusOptions = (currentStatus) => {
     const items = currentStatus && !ALL_STATUSES.includes(currentStatus) ? [currentStatus, ...ALL_STATUSES] : ALL_STATUSES;
@@ -3040,6 +3080,7 @@
             Envío: ${fmt(o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate))}
             ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
           </div>
+          <div style="margin-top:4px;">${getSettlementBadgeHTML(o.settlement)}</div>
         </td>
         <td>
           <select class="status-select" style="border:1px solid var(--border); background:white; max-width:180px;" onchange="window.DashboardManager.assignCourier('${escapeHtml(o.id)}', this.value)">${getCourierOptions(o.courierId, { includeUnassigned: true })}</select>
@@ -3054,6 +3095,7 @@
             <button onclick="window.DashboardManager.editOrder('${escapeHtml(o.id)}')" class="whatsapp-btn" style="background:#E0E7FF; color:#4338CA; padding:6px;" title="Editar Pedido"><i data-lucide="edit-2" style="width:14px;height:14px;"></i></button>
             <a href="https://wa.me/${escapeHtml(o.ws || '')}" target="_blank" class="whatsapp-btn" style="padding:6px;" title="WhatsApp Básico"><i data-lucide="message-circle" style="width:14px;height:14px;"></i></a>
             <button onclick="window.DashboardManager.openPostSaleModal('${escapeHtml(o.id)}')" class="tiny-btn route" title="Gestionar cambio o devolución"><i data-lucide="refresh-ccw" style="width:13px;height:13px;"></i> Caso</button>
+            <button onclick="window.DashboardManager.reconcilePayment('${escapeHtml(o.id)}')" class="tiny-btn form" title="Conciliar cobro"><i data-lucide="wallet" style="width:13px;height:13px;"></i> Cobro</button>
             <button onclick="window.DashboardManager.openReturnForm('${escapeHtml(o.id)}')" class="tiny-btn form" title="Abrir formulario"><i data-lucide="external-link" style="width:13px;height:13px;"></i> Form</button>
             ${hasDoc ? `<button onclick="window.DashboardManager.openPostSaleDocument('${escapeHtml(o.id)}')" class="tiny-btn doc" title="Abrir PDF"><i data-lucide="file-text" style="width:13px;height:13px;"></i> PDF</button>` : ''}
             ${isPostSaleOrder(o)
@@ -3136,9 +3178,36 @@
         order.deliveryDate = tomorrow.toISOString().split('T')[0];
       }
       save();
+      addAudit('Cambio de estado', `${prevStatus} → ${newStatus}`, id);
       renderStats();
       renderTable();
       renderInventoryTable();
+    },
+    reconcilePayment(id) {
+      const order = orders.find((o) => o.id === id);
+      if (!order) return;
+      order.settlement = { ...getDefaultSettlement(), ...(order.settlement || {}) };
+      const statusRaw = prompt(`Estado de conciliación para ${id}:\n1) Pendiente\n2) Parcial\n3) Liquidado\n4) Faltante\n\nEscribe una opción o texto:`, order.settlement.status || 'Pendiente');
+      if (statusRaw === null) return;
+      const s = norm(statusRaw);
+      let status = 'Pendiente';
+      if (s === '2' || s.includes('parcial')) status = 'Parcial';
+      else if (s === '3' || s.includes('liquid')) status = 'Liquidado';
+      else if (s === '4' || s.includes('falt')) status = 'Faltante';
+      const paidRaw = prompt(`Monto liquidado para ${id} (ej: 1695):`, String(order.settlement.paidAmount || order.numericAmount || 0));
+      if (paidRaw === null) return;
+      const paidAmount = Math.max(0, parseMoney(paidRaw));
+      const note = prompt(`Nota de conciliación para ${id} (opcional):`, order.settlement.note || '') ?? order.settlement.note || '';
+      order.settlement = {
+        status,
+        paidAmount,
+        date: new Date().toISOString().split('T')[0],
+        note: String(note || '').trim(),
+      };
+      save();
+      addAudit('Conciliación de cobro', `${status} - Liquidado: ${fmt(paidAmount)}`, id);
+      renderTable();
+      showToast(`Cobro actualizado para ${id}.`, 'success');
     },
     updateRate(val) {
       rate = Number(val) || 0;
@@ -3351,6 +3420,7 @@
       order.courierId = normalizeCourierId(courierId);
       syncOrderCourierName(order);
       save();
+      addAudit('Asignación de mensajero', order.courierName || 'Sin asignar', id);
       renderStats();
       renderTable();
       showToast(order.courierId ? `Pedido ${id} asignado a ${order.courierName}.` : `Pedido ${id} sin mensajero asignado.`, 'success');
@@ -3362,6 +3432,7 @@
       selected.forEach((order) => {
         order.courierId = normalized;
         syncOrderCourierName(order);
+        addAudit('Asignación masiva de mensajero', order.courierName || 'Sin asignar', order.id);
       });
       save();
       renderStats();
@@ -3443,6 +3514,7 @@
           return showToast(reserveResult.reason, 'error');
         }
         syncOrderCourierName(order);
+        addAudit('Edición de pedido', `Monto ${fmt(order.numericAmount)} / ${order.status}`, editId);
         showToast(`Pedido ${editId} actualizado exitosamente`, 'success');
       } else {
         const maxNum = orders.reduce((m, o) => {
@@ -3453,6 +3525,7 @@
         const reserveResult = reserveInventoryForOrder(newOrder);
         if (!reserveResult.ok) return showToast(reserveResult.reason, 'error');
         orders.unshift(newOrder);
+        addAudit('Creación de pedido', `Monto ${fmt(newOrder.numericAmount)} / ${newOrder.status}`, newOrder.id);
         showToast('Pedido creado exitosamente', 'success');
       }
       save();
@@ -3571,6 +3644,7 @@
           rollbackDispatchedInventoryForOrder(order);
         });
         orders = orders.filter((o) => !selectedIds.has(o.id));
+        addAudit('Eliminación de pedidos', `${selectedIds.size} pedido(s) eliminados`, '');
         selectedIds.clear();
         save();
         renderStats();
@@ -3585,6 +3659,7 @@
           rollbackDispatchedInventoryForOrder(order);
         });
         orders = [];
+        addAudit('Limpieza de dashboard', 'Se eliminaron todos los pedidos', '');
         selectedIds.clear();
         save();
         renderStats();
@@ -3599,6 +3674,7 @@
         o.status = newStatus;
         syncPostSaleFromStatus(o, newStatus);
         refreshInventoryByStatus(o, prevStatus, newStatus);
+        addAudit('Cambio de estado masivo', `${prevStatus} → ${newStatus}`, o.id);
       });
       save();
       renderStats();
@@ -3903,6 +3979,7 @@
         if (dateTo && targetDate > dateTo) return false;
         if (!matchesCourierFilter(o, courierFilter)) return false;
         if (repType === 'postsale') return isPostSaleOrder(o);
+        if (repType === 'sales') return !isPostSaleOrder(o);
         return norm(o.status).includes('entregado');
       });
       if (!filtered.length) {
@@ -3925,7 +4002,7 @@
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolución</th></tr>';
         document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolución')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolución', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
-      } else {
+      } else if (repType === 'courier') {
         currentReportName = `Reporte_Mensajero_${safeFileToken(courierLabel)}`;
         let totalRecaudo = 0;
         let totalMensajero = 0;
@@ -3943,6 +4020,40 @@
           <div class="stat-card courier"><div class="stat-icon"><i data-lucide="truck"></i></div><div class="stat-info"><h3>Pago al Mensajero</h3><p>${fmt(totalMensajero)}</p></div></div>
           <div class="stat-card net"><div class="stat-icon"><i data-lucide="trending-up"></i></div><div class="stat-info"><h3>Ganancia Neta</h3><p>${fmt(totalRecaudo - totalMensajero)}</p></div></div>`;
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaEntrega: o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Ciudad: o.city, VentaBruta: o.numericAmount, CostoMensajero: o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate), GananciaNeta: o.numericAmount - (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)) }));
+      } else {
+        currentReportName = `Reporte_Ventas_Generales_${safeFileToken(courierLabel)}`;
+        const deliveredCount = filtered.filter((o) => norm(o.status).includes('entregado')).length;
+        const pendingCount = filtered.filter((o) => norm(o.status).includes('pendiente') || norm(o.status).includes('proceso')).length;
+        const canceledCount = filtered.filter((o) => norm(o.status).includes('cancelado')).length;
+        const grossSales = filtered.filter((o) => !norm(o.status).includes('cancelado')).reduce((sum, o) => sum + Number(o.numericAmount || 0), 0);
+        const collectedSales = filtered.filter((o) => norm(o.status).includes('entregado')).reduce((sum, o) => sum + Number(o.numericAmount || 0), 0);
+        const pendingCollection = Math.max(0, grossSales - collectedSales);
+        document.getElementById('report-title').innerText = `Reporte de Ventas Generales - ${courierLabel} (${filtered.length} pedidos)`;
+        document.getElementById('report-summary').innerHTML = `
+          <div class="stat-card money"><div class="stat-icon"><i data-lucide="shopping-bag"></i></div><div class="stat-info"><h3>Ventas Brutas</h3><p>${fmt(grossSales)}</p></div></div>
+          <div class="stat-card courier"><div class="stat-icon"><i data-lucide="check-circle"></i></div><div class="stat-info"><h3>Cobrado</h3><p>${fmt(collectedSales)}</p></div></div>
+          <div class="stat-card net"><div class="stat-icon"><i data-lucide="clock-3"></i></div><div class="stat-info"><h3>Pendiente de Cobro</h3><p>${fmt(pendingCollection)}</p></div></div>
+          <div class="stat-card" style="border-color:#E5E7EB; background:#F9FAFB;">
+            <div class="stat-icon" style="background:#E5E7EB; color:#374151;"><i data-lucide="list-checks"></i></div>
+            <div class="stat-info" style="width:100%;">
+              <h3 style="margin-bottom:6px;">Estados del Período</h3>
+              <table style="width:100%; border-collapse:collapse; font-size:0.75rem; line-height:1.2;">
+                <tr><td style="padding:2px 0; color:#6B7280;">Entregados</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#065F46;">${deliveredCount}</td></tr>
+                <tr><td style="padding:2px 0; color:#6B7280;">Pendientes</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#92400E;">${pendingCount}</td></tr>
+                <tr><td style="padding:2px 0; color:#6B7280;">Cancelados</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#991B1B;">${canceledCount}</td></tr>
+              </table>
+            </div>
+          </div>`;
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Estado</th><th>Recaudo</th></tr>';
+        let totalRecaudoSales = 0;
+        const salesRows = filtered.map((o) => {
+          const isCanceled = norm(o.status).includes('cancelado');
+          if (!isCanceled) totalRecaudoSales += Number(o.numericAmount || 0);
+          return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td>${escapeHtml(o.status)}</td><td style="font-weight:700; color:${isCanceled ? '#9CA3AF' : '#065F46'};">${isCanceled ? `${fmt(o.numericAmount)} (No suma)` : fmt(o.numericAmount)}</td></tr>`;
+        }).join('');
+        const salesTotals = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="6" style="font-weight:800; color:#0F172A;">TOTAL RECAUDO (sin cancelados)</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoSales)}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${salesRows}${salesTotals}`;
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, Fecha: o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Ciudad: o.city, Estado: o.status, Recaudo: o.numericAmount }));
       }
       if (repType === 'postsale') {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Mensajero</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolucion</th></tr>';
@@ -3950,7 +4061,7 @@
         const postSaleTotalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="7" style="font-weight:800; color:#0F172A;">TOTAL DE CASOS</td><td style="font-weight:800; color:#0F172A;">${filtered.length}</td></tr>`;
         document.getElementById('report-tbody').innerHTML = `${postSaleRows}${postSaleTotalsRow}`;
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolucion', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
-      } else {
+      } else if (repType === 'courier') {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envio</th><th>Neto Empresa</th></tr>';
         let totalRecaudoFinal = 0;
         let totalCostoFinal = 0;
@@ -3965,7 +4076,7 @@
         }).join('');
         const totalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="5" style="font-weight:800; color:#0F172A;">TOTALES</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoFinal)}</td><td style="font-weight:800; color:#4C1D95;">${fmt(totalCostoFinal)}</td><td style="font-weight:800; color:#1E40AF;">${fmt(totalNetoFinal)}</td></tr>`;
         document.getElementById('report-tbody').innerHTML = `${deliveryRows}${totalsRow}`;
-      }
+      } 
       if (window.lucide) window.lucide.createIcons();
     },
     exportReportExcel() {
@@ -3996,3 +4107,4 @@
 </body>
 
 </html>
+
