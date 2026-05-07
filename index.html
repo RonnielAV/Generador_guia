@@ -3946,15 +3946,25 @@
       }
       if (repType === 'postsale') {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Mensajero</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolucion</th></tr>';
-        document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolucion')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        const postSaleRows = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolucion')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        const postSaleTotalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="7" style="font-weight:800; color:#0F172A;">TOTAL DE CASOS</td><td style="font-weight:800; color:#0F172A;">${filtered.length}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${postSaleRows}${postSaleTotalsRow}`;
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolucion', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
       } else {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envio</th><th>Neto Empresa</th></tr>';
-        document.getElementById('report-tbody').innerHTML = filtered.map((o) => {
+        let totalRecaudoFinal = 0;
+        let totalCostoFinal = 0;
+        let totalNetoFinal = 0;
+        const deliveryRows = filtered.map((o) => {
           const costo = o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate);
           const neto = o.numericAmount - costo;
+          totalRecaudoFinal += o.numericAmount;
+          totalCostoFinal += costo;
+          totalNetoFinal += neto;
           return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td style="font-weight:600; color:#065F46;">${fmt(o.numericAmount)}</td><td style="font-weight:600; color:#4C1D95;">${fmt(costo)}</td><td style="font-weight:700; color:#1E40AF;">${fmt(neto)}</td></tr>`;
         }).join('');
+        const totalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="5" style="font-weight:800; color:#0F172A;">TOTALES</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoFinal)}</td><td style="font-weight:800; color:#4C1D95;">${fmt(totalCostoFinal)}</td><td style="font-weight:800; color:#1E40AF;">${fmt(totalNetoFinal)}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${deliveryRows}${totalsRow}`;
       }
       if (window.lucide) window.lucide.createIcons();
     },
