@@ -2287,7 +2287,8 @@
           guideBatch: localStorage.getItem('marketup_guideBatch'),
           couriers: localStorage.getItem('marketup_couriers'),
           inventory: localStorage.getItem('marketup_inventory'),
-          aiKey: localStorage.getItem('marketup_ai_key')
+          aiKey: localStorage.getItem('marketup_ai_key'),
+          audit: localStorage.getItem('marketup_audit')
         };
         
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
@@ -2329,6 +2330,10 @@
             if (backupData.aiKey !== undefined) {
               if (backupData.aiKey === null) localStorage.removeItem('marketup_ai_key');
               else localStorage.setItem('marketup_ai_key', backupData.aiKey);
+            }
+            if (backupData.audit !== undefined) {
+              if (backupData.audit === null) localStorage.removeItem('marketup_audit');
+              else localStorage.setItem('marketup_audit', backupData.audit);
             }
             
             showToast("Respaldo restaurado. Recargando el sistema...", "success");
@@ -3197,7 +3202,8 @@
       const paidRaw = prompt(`Monto liquidado para ${id} (ej: 1695):`, String(order.settlement.paidAmount || order.numericAmount || 0));
       if (paidRaw === null) return;
       const paidAmount = Math.max(0, parseMoney(paidRaw));
-      const note = prompt(`Nota de conciliación para ${id} (opcional):`, order.settlement.note || '') ?? order.settlement.note || '';
+      const notePrompt = prompt(`Nota de conciliación para ${id} (opcional):`, order.settlement.note || '');
+      const note = notePrompt === null ? (order.settlement.note || '') : notePrompt;
       order.settlement = {
         status,
         paidAmount,
@@ -3963,6 +3969,20 @@
       const msg = "Para usar la IA avanzada en tu computadora local, necesitas tu API Key de Google AI Studio.\n\n(Asegúrate de que la clave empiece con 'AIza...')\n\nPégala aquí:";
       const newKey = prompt(msg, currentKey);
       if (newKey !== null) GeminiAPI.setLocalKey(newKey.trim());
+    },
+    exportAuditExcel() {
+      if (!auditLog.length) return showToast('No hay eventos de auditoría para exportar.', 'warning');
+      const rows = auditLog.map((a) => ({
+        'FechaHora': a.at || '',
+        'Accion': a.action || '',
+        'Pedido': a.orderId || '',
+        'Detalle': a.detail || '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Auditoria');
+      XLSX.writeFile(wb, `Auditoria_Marketup_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showToast('Auditoría exportada.', 'success');
     }
   };
 
