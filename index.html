@@ -15,6 +15,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
   <style>
     /* =========================================================================
@@ -699,6 +700,14 @@
         </tbody>
       </table>
     </div>
+    <div class="dash-toolbar" style="border-radius: 12px; margin-top: 18px;">
+      <div style="width:100%;">
+        <h3 style="font-size: 1rem; margin-bottom: 10px; color: var(--text-main);">Distribución de Pedidos</h3>
+        <div style="height: 250px;">
+          <canvas id="dashboard-pie-chart"></canvas>
+        </div>
+      </div>
+    </div>
 
   </div>
 
@@ -707,6 +716,14 @@
       <div>
         <h2 style="font-size: 1.8rem; font-weight: 800; color: var(--text-main); margin:0;">Inventario</h2>
         <p style="color: var(--text-muted); font-size: 0.95rem; margin-top:4px;">Control de disponible, reservado y despachado.</p>
+      </div>
+    </div>
+    <div class="dash-toolbar" style="border-radius: 12px; margin-bottom: 18px;">
+      <div style="width:100%;">
+        <h3 style="font-size: 1rem; margin-bottom: 10px; color: var(--text-main);">Distribución de Pedidos</h3>
+        <div style="height: 250px;">
+          <canvas id="dashboard-pie-chart"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -755,6 +772,14 @@
       
       <div class="stats-grid" id="report-summary">
         <!-- Summary Cards -->
+      </div>
+      <div class="dash-toolbar" style="border-radius: 12px; margin-bottom: 16px;">
+        <div style="width:100%;">
+          <h3 style="font-size: 1rem; margin-bottom: 10px; color: var(--text-main);">Gráfico del Reporte</h3>
+          <div style="height: 250px;">
+            <canvas id="report-pie-chart"></canvas>
+          </div>
+        </div>
       </div>
       
       <div class="table-wrapper">
@@ -2498,6 +2523,9 @@
   let filterDateTo = '';
   let currentReportData = [];
   let currentReportName = 'Reporte';
+  let dashboardPieChart = null;
+  let inventoryPieChart = null;
+  let reportPieChart = null;
 
   const getDefaultPostSale = () => ({
     type: '',
@@ -2698,6 +2726,7 @@
         </td>
       </tr>`;
     }).join('');
+    renderInventoryPie();
   };
 
   const sanitizeOrder = (order) => {
@@ -3068,6 +3097,107 @@
     if (byId('stat-postventa')) byId('stat-postventa').textContent = postSaleOpen.length;
     if (byId('stat-recaudo')) byId('stat-recaudo').textContent = fmt(totalRevenue);
     if (byId('stat-pago')) byId('stat-pago').textContent = fmt(totalPago);
+    renderDashboardPie();
+  };
+
+  const renderDashboardPie = () => {
+    const canvas = document.querySelector('#view-dashboard #dashboard-pie-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const entregados = orders.filter((o) => norm(o.status).includes('entregado')).length;
+    const enProceso = orders.filter((o) => norm(o.status).includes('proceso')).length;
+    const pendientes = orders.filter((o) => norm(o.status).includes('pendiente')).length;
+    const cancelados = orders.filter((o) => norm(o.status).includes('cancelado')).length;
+    const postventa = orders.filter((o) => isPostSaleOrder(o)).length;
+    if (dashboardPieChart) dashboardPieChart.destroy();
+    dashboardPieChart = new Chart(canvas, {
+      type: 'pie',
+      data: {
+        labels: ['Entregados', 'En Proceso', 'Pendientes', 'Cancelados', 'Postventa'],
+        datasets: [{
+          data: [entregados, enProceso, pendientes, cancelados, postventa],
+          backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#6366F1'],
+          borderWidth: 1,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  };
+
+  const renderInventoryPie = () => {
+    const canvas = document.querySelector('#view-inventory #dashboard-pie-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const totalDisponible = inventory.reduce((sum, item) => sum + Number(item.available || 0), 0);
+    const totalReservado = inventory.reduce((sum, item) => sum + Number(item.reserved || 0), 0);
+    const totalDespachado = inventory.reduce((sum, item) => sum + Number(item.dispatched || 0), 0);
+    if (inventoryPieChart) inventoryPieChart.destroy();
+    inventoryPieChart = new Chart(canvas, {
+      type: 'pie',
+      data: {
+        labels: ['Disponible', 'Reservado', 'Despachado'],
+        datasets: [{
+          data: [totalDisponible, totalReservado, totalDespachado],
+          backgroundColor: ['#10B981', '#F59E0B', '#6366F1'],
+          borderWidth: 1,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  };
+
+  const renderReportPie = (filtered, repType) => {
+    const canvas = document.getElementById('report-pie-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    let labels = [];
+    let values = [];
+    let colors = [];
+    if (repType === 'postsale') {
+      labels = ['Cambios', 'Devoluciones', 'Ruta Pendiente'];
+      values = [
+        filtered.filter((o) => o.postSale?.type === 'change').length,
+        filtered.filter((o) => o.postSale?.type === 'return').length,
+        filtered.filter((o) => o.postSale?.routeAction && !isClosedPostSale(o)).length
+      ];
+      colors = ['#6366F1', '#EF4444', '#F59E0B'];
+    } else if (repType === 'sales') {
+      labels = ['Entregados', 'Pendientes', 'Cancelados'];
+      values = [
+        filtered.filter((o) => norm(o.status).includes('entregado')).length,
+        filtered.filter((o) => norm(o.status).includes('pendiente') || norm(o.status).includes('proceso')).length,
+        filtered.filter((o) => norm(o.status).includes('cancelado')).length
+      ];
+      colors = ['#10B981', '#F59E0B', '#EF4444'];
+    } else {
+      const totalRecaudo = filtered.reduce((sum, o) => sum + Number(o.numericAmount || 0), 0);
+      const totalCosto = filtered.reduce((sum, o) => sum + (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)), 0);
+      const neto = Math.max(0, totalRecaudo - totalCosto);
+      labels = ['Recaudo', 'Costo Envío', 'Neto'];
+      values = [totalRecaudo, totalCosto, neto];
+      colors = ['#10B981', '#8B5CF6', '#2563EB'];
+    }
+    if (reportPieChart) reportPieChart.destroy();
+    reportPieChart = new Chart(canvas, {
+      type: 'pie',
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 1, borderColor: '#fff' }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
   };
 
   const getBadgeHTML = (status) => {
@@ -4148,6 +4278,7 @@
         const totalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="5" style="font-weight:800; color:#0F172A;">TOTALES</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoFinal)}</td><td style="font-weight:800; color:#4C1D95;">${fmt(totalCostoFinal)}</td><td style="font-weight:800; color:#1E40AF;">${fmt(totalNetoFinal)}</td></tr>`;
         document.getElementById('report-tbody').innerHTML = `${deliveryRows}${totalsRow}`;
       } 
+      renderReportPie(filtered, repType);
       if (window.lucide) window.lucide.createIcons();
     },
     exportReportExcel() {
