@@ -335,6 +335,19 @@
               <input type="text" id="new-sku-preview" readonly placeholder="Se llena al elegir producto">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Quien asume envio</label>
+              <select id="new-shipping-payer">
+                <option value="empresa">Empresa (gratis cliente)</option>
+                <option value="cliente">Cliente</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Monto envio cliente (RD$)</label>
+              <input type="number" id="new-shipping-charge" min="0" step="0.01" value="0" placeholder="0.00">
+            </div>
+          </div>
           <div class="btn-group" style="margin-top: 24px; justify-content: flex-end; margin-bottom: 0;">
             <button type="button" class="btn btn-outline" onclick="document.getElementById('new-order-modal').style.display='none'">Cancelar</button>
             <button type="submit" class="btn btn-secondary">Guardar Pedido</button>
@@ -633,7 +646,7 @@
           <select id="report-type" class="status-select" style="border: 1px solid var(--border); background: white; padding: 8px 12px;">
             <option value="courier">Entregados vs Pago Mensajero</option>
             <option value="postsale">Cambios y devoluciones</option>
-            <option value="sales" disabled>Ventas Generales (Próximamente)</option>
+            <option value="sales">Ventas Generales</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
@@ -986,7 +999,7 @@
       const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
       const formatGuideNumber = (value) => { const digits = String(value ?? '').replace(/\D/g, ''); const num = digits ? parseInt(digits, 10) : 1; return `PED-${String(Math.max(1, num)).padStart(3, '0')}`; };
       const formatDateDisplay = (val) => { if (!val || typeof val !== 'string' || !val.includes('-')) return val; const parts = val.split('-'); if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`; return val; };
-      const formatCurrency = (val) => { if (!val) return ''; const cleanStr = String(val).replace(/RD\$?/ig, '').trim(); const num = parseFloat(cleanStr.replace(/,/g, '')); if (isNaN(num)) return val; return `RD$ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+      const formatCurrency = (val) => { if (!val && val !== 0) return ''; const cleanStr = String(val).replace(/RD\$?/ig, '').trim(); const num = parseFloat(cleanStr.replace(/,/g, '')); if (isNaN(num)) return val; return `RD$ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
       const extractGuideSequence = (value) => { const match = String(value ?? '').match(/(\d+)/); return match ? Math.max(1, parseInt(match[1], 10)) : 1; };
       const normalizeKey = (key) => key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, '_');
       const formatPhone = (val) => { const digits = val.replace(/\D/g, ''); if (digits.length === 0) return ''; if (digits.length <= 3) return digits; if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`; return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`; };
@@ -1317,10 +1330,12 @@
             addWrappedText(item.contentText, columns[2].x, y, columns[2].w);
             doc.setFont('helvetica', 'normal');
             doc.text(addressLines, columns[3].x, y);
-            doc.setTextColor(107, 114, 128);
+            doc.setTextColor(220, 38, 38);
+            doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.2);
             doc.text(noteLines, columns[3].x, y + (addressLines.length * lineHeight) + 1.5);
             doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
             doc.setTextColor(17, 24, 39);
             addWrappedText(item.amount, columns[4].x, y, columns[4].w, 'bold');
             doc.setFillColor(16, 185, 129);
@@ -1342,7 +1357,7 @@
         let rowsHTML = '';
         printableBatch.forEach((item) => {
           const instructionNote = escapeHtml(item.guideNote || '').replace(/\n/g, '<br>');
-          rowsHTML += `<tr><td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(item.guideNumber)}</strong></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.recipientName)}<br><small style="color:#666;">${escapeHtml(item.recipientPhone)}</small></td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${escapeHtml(item.contentText)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 260px; white-space: normal; line-height: 1.4;">${escapeHtml(item.recipientAddress)}, ${escapeHtml(item.recipientCity)}<div style="margin-top:8px; font-size:12px;"><strong>Nota:</strong> ${instructionNote || '<span style="color:#999;">Sin nota</span>'}</div></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.amount)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: left; min-width: 160px;"><a href="${escapeHtml(getWhatsAppLinkWithMessage(item))}" style="color: #0056b3; font-weight: bold; text-decoration: underline;">Abrir WhatsApp</a></td></tr>`;
+          rowsHTML += `<tr><td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>${escapeHtml(item.guideNumber)}</strong></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(item.recipientName)}<br><small style="color:#666;">${escapeHtml(item.recipientPhone)}</small></td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 150px; font-size: 13px;">${escapeHtml(item.contentText)}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; max-width: 260px; white-space: normal; line-height: 1.4;">${escapeHtml(item.recipientAddress)}, ${escapeHtml(item.recipientCity)}<div style="margin-top:8px; font-size:12px; color:#DC2626; font-weight:700;"><strong>Nota:</strong> ${instructionNote || '<span style="color:#999; font-weight:400;">Sin nota</span>'}</div></td><td style="padding: 12px; border-bottom: 1px solid #ddd;">${escapeHtml(formatCurrency(item.amount || 0))}</td><td style="padding: 12px; border-bottom: 1px solid #ddd; text-align: left; min-width: 160px;"><a href="${escapeHtml(getWhatsAppLinkWithMessage(item))}" style="color: #0056b3; font-weight: bold; text-decoration: underline;">Abrir WhatsApp</a></td></tr>`;
         });
         const printWin = window.open('', '_blank'); if (!printWin) return showToast('Desbloquea pop-ups.', 'warning');
         printWin.document.write(`<!DOCTYPE html><html lang="es"><head><style>body{font-family:sans-serif;margin:40px} table{width:100%;border-collapse:collapse} th{background:#f8f9fa;padding:12px;text-align:left;border-bottom:2px solid #ddd} td{padding:12px;border-bottom:1px solid #ddd}</style></head><body><h2>Listado de Despacho</h2><p><strong>Mensajero:</strong> ${escapeHtml(courierLabel)}<br><strong>Total Paquetes:</strong> ${printableBatch.length}</p><table><thead><tr><th>Guía</th><th>Cliente</th><th>Contenido</th><th>Dirección</th><th>Recaudo</th><th>Acción</th></tr></thead><tbody>${rowsHTML}</tbody></table><script>setTimeout(()=>window.print(), 500);<\/script></body></html>`);
@@ -1440,7 +1455,7 @@
           shipperName: defaults.shipperName, shipperAddress: defaults.shipperAddress,
           recipientName: o.name, recipientPhone: o.phone, recipientAddress: o.address, recipientCity: o.city,
           company: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '') || defaults.company,
-          declaredValue: '', contentText: `${Math.max(1, Number(o.quantity || 1))} ${String(o.product || '').trim()}`.trim(), amount: o.amountStr,
+          declaredValue: '', contentText: `${Math.max(1, Number(o.quantity || 1))} ${String(o.product || '').trim()}`.trim(), amount: formatCurrency(o.numericAmount),
           guideNumber: o.id, dateText: o.date || new Date().toISOString().split('T')[0], guideNote: o.notes || defaults.guideNote,
           courierId: o.courierId || '', courierName: o.courierName || (o.courierId ? (window.DashboardManager?.getCourierLabel?.(o.courierId) || '') : '')
         }));
@@ -1681,8 +1696,8 @@
         document.getElementById('stat-total').textContent = orders.length;
         document.getElementById('stat-entregados').textContent = delivered.length;
         document.getElementById('stat-pendientes').textContent = pending.length;
-        document.getElementById('stat-recaudo').textContent = `RD$ ${totalRevenue.toLocaleString('en-US')}`;
-        document.getElementById('stat-pago').textContent = `RD$ ${totalPago.toLocaleString('en-US')}`;
+        document.getElementById('stat-recaudo').textContent = `RD$ ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        document.getElementById('stat-pago').textContent = `RD$ ${totalPago.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       };
 
       const getBadgeHTML = (status) => {
@@ -1704,7 +1719,7 @@
         document.getElementById('new-city').value = order.city;
         document.getElementById('new-address').value = order.address;
         document.getElementById('new-product').value = order.product;
-        document.getElementById('new-amount').value = order.numericAmount;
+        document.getElementById('new-amount').value = Number(order.numericAmount || 0).toFixed(2);
 
         document.getElementById('modal-title-text').innerText = `Editar Pedido (${order.id})`;
         document.getElementById('new-order-modal').style.display = 'flex';
@@ -1886,7 +1901,7 @@
             <td style="font-weight:600;">
               ${o.amountStr}
               <div style="font-size: 0.7rem; color: #8B5CF6; font-weight: 600; margin-top: 4px;" title="Costo por envío a ${o.city}">
-                Envío: RD$ ${o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)} 
+                Envío: RD$ ${(o.aiCalculated ? o.courierCost : window.DashboardManager.calculateCourierCostLocal(o.city, o.address, rate)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
                 ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
               </div>
             </td>
@@ -1956,7 +1971,7 @@
               address: String(cRow['direccion'] || cRow['calle'] || '').trim(),
               city: String(cRow['ciudad'] || cRow['municipio'] || '').trim(),
               product: String(cRow['productos'] || cRow['contenido'] || cRow['articulo'] || '').trim(),
-              amountStr: rawMonto ? (String(rawMonto).includes('RD$') ? rawMonto : `RD$ ${numMonto}`) : 'RD$ 0',
+              amountStr: rawMonto ? (String(rawMonto).includes('RD$') ? formatCurrency(rawMonto) : formatCurrency(numMonto)) : 'RD$ 0.00',
               numericAmount: numMonto,
               status: String(cRow['estado'] || cRow['status'] || 'En Proceso').trim(),
               ws: ws,
@@ -2084,7 +2099,7 @@
                 order.city = city;
                 order.address = address;
                 order.product = product;
-                order.amountStr = `RD$ ${amount}`;
+                order.amountStr = formatCurrency(amount);
                 order.numericAmount = amount;
                 order.ws = ws;
             }
@@ -2100,7 +2115,7 @@
               address,
               city,
               product,
-              amountStr: `RD$ ${amount}`,
+              amountStr: formatCurrency(amount),
               numericAmount: amount,
               status: 'En Proceso',
               ws: ws,
@@ -2217,9 +2232,9 @@
                     <td>${targetDate}</td>
                     <td>${o.name}</td>
                     <td>${o.city}</td>
-                    <td style="font-weight:600; color:#065F46;">RD$ ${recaudo.toLocaleString('en-US')}</td>
-                    <td style="font-weight:600; color:#4C1D95;">RD$ ${costoEnvio.toLocaleString('en-US')}</td>
-                    <td style="font-weight:700; color:#1E40AF;">RD$ ${neto.toLocaleString('en-US')}</td>
+                    <td style="font-weight:600; color:#065F46;">RD$ ${recaudo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style="font-weight:600; color:#4C1D95;">RD$ ${costoEnvio.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style="font-weight:700; color:#1E40AF;">RD$ ${neto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>`;
             }).join('');
 
@@ -2231,15 +2246,15 @@
             const summaryHtml = `
               <div class="stat-card money">
                 <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
-                <div class="stat-info"><h3>Ingresos Brutos</h3><p>RD$ ${totalRecaudo.toLocaleString('en-US')}</p></div>
+                <div class="stat-info"><h3>Ingresos Brutos</h3><p>RD$ ${totalRecaudo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
               </div>
               <div class="stat-card courier">
                 <div class="stat-icon"><i data-lucide="truck"></i></div>
-                <div class="stat-info"><h3>Pago al Mensajero</h3><p>RD$ ${totalMensajero.toLocaleString('en-US')}</p></div>
+                <div class="stat-info"><h3>Pago al Mensajero</h3><p>RD$ ${totalMensajero.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
               </div>
               <div class="stat-card net">
                 <div class="stat-icon"><i data-lucide="trending-up"></i></div>
-                <div class="stat-info"><h3>Ganancia Neta</h3><p>RD$ ${totalNeto.toLocaleString('en-US')}</p></div>
+                <div class="stat-info"><h3>Ganancia Neta</h3><p>RD$ ${totalNeto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
               </div>
             `;
             document.getElementById('report-summary').innerHTML = summaryHtml;
@@ -2364,7 +2379,12 @@
   const ALL_STATUSES = [...DEFAULT_STATUSES, ...POST_SALE_STATUSES];
 
   const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const fmt = (n) => `RD$ ${Number(n || 0).toLocaleString('en-US')}`;
+  const fmt = (n) => `RD$ ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const parseMoney = (v) => {
+    const s = String(v ?? '').replace(/RD\$/ig, '').replace(/,/g, '').trim();
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
   const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   const isPostSaleStatus = (s) => POST_SALE_STATUSES.includes(s);
   const isPostSaleOrder = (o) => !!(o?.postSale?.type || o?.postSale?.status || o?.postSale?.routeAction);
@@ -2598,14 +2618,16 @@
       address: String(order.address || '').trim(),
       city: String(order.city || '').trim(),
       product: productName,
-      amountStr: String(order.amountStr || `RD$ ${Number(order.numericAmount || 0)}`),
-      numericAmount: Number(order.numericAmount || 0),
+      amountStr: fmt(Number(order.numericAmount ?? parseMoney(order.amountStr) ?? 0)),
+      numericAmount: Number(order.numericAmount ?? parseMoney(order.amountStr) ?? 0),
       status: String(order.status || 'En Proceso').trim(),
       ws: String(order.ws || '').trim(),
       notes: String(order.notes || '').trim(),
       inventorySku: normalizedSku,
       quantity: Math.max(1, Number(order.quantity || 1)),
       inventoryState: String(order.inventoryState || 'none'),
+      shippingPayer: ['empresa', 'cliente'].includes(String(order.shippingPayer || '').toLowerCase()) ? String(order.shippingPayer).toLowerCase() : 'empresa',
+      shippingCharge: Math.max(0, Number(order.shippingCharge || 0)),
       courierId,
       courierName: courierId ? getCourierName(courierId) : '',
       aiCalculated: !!order.aiCalculated,
@@ -2827,6 +2849,19 @@
       });
       document.getElementById('new-product').dataset.inventoryBound = '1';
     }
+    if (document.getElementById('new-shipping-payer') && !document.getElementById('new-shipping-payer').dataset.bound) {
+      const payerEl = document.getElementById('new-shipping-payer');
+      const chargeEl = document.getElementById('new-shipping-charge');
+      const refreshShippingUI = () => {
+        if (!chargeEl) return;
+        const isClient = (payerEl?.value || 'empresa') === 'cliente';
+        chargeEl.disabled = !isClient;
+        if (!isClient) chargeEl.value = '0.00';
+      };
+      payerEl.addEventListener('change', refreshShippingUI);
+      refreshShippingUI();
+      payerEl.dataset.bound = '1';
+    }
 
     const th = document.querySelector('.dash-table thead tr th:last-child');
     if (th) th.style.width = '260px';
@@ -3029,10 +3064,14 @@
           ${postSaleSummary(o)}
         </td>
         <td style="font-weight:600;">
-          ${escapeHtml(o.amountStr)}
+          ${escapeHtml(fmt(o.numericAmount))}
           <div style="font-size:0.7rem; color:#8B5CF6; font-weight:600; margin-top:4px;" title="Costo por envío a ${escapeHtml(o.city)}">
             Envío: ${fmt(o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate))}
             ${o.aiCalculated ? '<span style="font-size:0.6rem; background:#EDE9FE; color:#6D28D9; padding:2px 4px; border-radius:4px; margin-left:4px;" title="Calculado por IA">✨ IA</span>' : ''}
+          </div>
+          <div style="font-size:0.68rem; margin-top:3px; color:#6B7280;">
+            Asume envio: <strong>${o.shippingPayer === 'cliente' ? 'Cliente' : 'Empresa (gratis cliente)'}</strong>
+            ${o.shippingPayer === 'cliente' ? ` | Cliente paga: ${escapeHtml(fmt(o.shippingCharge || 0))}` : ''}
           </div>
         </td>
         <td>
@@ -3369,6 +3408,11 @@
       document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
       document.getElementById('new-qty').value = 1;
       document.getElementById('new-sku-preview').value = '';
+      if (document.getElementById('new-shipping-payer')) {
+        document.getElementById('new-shipping-payer').value = 'empresa';
+        document.getElementById('new-shipping-payer').dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (document.getElementById('new-shipping-charge')) document.getElementById('new-shipping-charge').value = '0.00';
       renderProductSelector('');
       renderCourierControls();
       if (document.getElementById('new-courier')) document.getElementById('new-courier').value = couriers[0]?.id || '';
@@ -3388,7 +3432,12 @@
       document.getElementById('new-product').value = order.inventorySku || '';
       document.getElementById('new-sku-preview').value = order.inventorySku || '';
       document.getElementById('new-qty').value = Math.max(1, Number(order.quantity || 1));
-      document.getElementById('new-amount').value = order.numericAmount;
+      document.getElementById('new-amount').value = Number(order.numericAmount || 0).toFixed(2);
+      if (document.getElementById('new-shipping-payer')) {
+        document.getElementById('new-shipping-payer').value = order.shippingPayer || 'empresa';
+        document.getElementById('new-shipping-payer').dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (document.getElementById('new-shipping-charge')) document.getElementById('new-shipping-charge').value = Number(order.shippingCharge || 0).toFixed(2);
       renderCourierControls();
       if (document.getElementById('new-courier')) document.getElementById('new-courier').value = order.courierId || '__unassigned__';
       document.getElementById('modal-title-text').innerText = `Editar Pedido (${order.id})`;
@@ -3411,10 +3460,13 @@
         inventorySku: selectedItem.sku,
         quantity: qty,
         numericAmount: parseFloat(document.getElementById('new-amount').value) || 0,
+        shippingPayer: String(document.getElementById('new-shipping-payer')?.value || 'empresa').toLowerCase(),
+        shippingCharge: Math.max(0, Number(document.getElementById('new-shipping-charge')?.value || 0)),
         courierId: normalizeCourierId(document.getElementById('new-courier')?.value || ''),
       };
+      if (payload.shippingPayer !== 'cliente') payload.shippingCharge = 0;
       payload.courierName = payload.courierId ? getCourierName(payload.courierId) : '';
-      payload.amountStr = `RD$ ${payload.numericAmount}`;
+      payload.amountStr = fmt(payload.numericAmount);
       let ws = payload.phone.replace(/\D/g, '');
       if (ws.length === 10) ws = `1${ws}`;
       payload.ws = ws;
@@ -3695,11 +3747,13 @@
             product: c.productos || c.contenido || c.articulo || '',
             inventorySku: c.sku || c.product_sku || '',
             quantity: Number(c.cantidad || c.qty || 1) || 1,
-            amountStr: String(rawMonto).includes('RD$') ? rawMonto : `RD$ ${numMonto}`,
+            amountStr: String(rawMonto).includes('RD$') ? fmt(parseFloat(String(rawMonto).replace(/[^0-9.]/g, '')) || 0) : fmt(numMonto),
             numericAmount: numMonto,
             status: c.estado || c.status || c.estado_postventa || 'En Proceso',
             notes: c.notas || c.nota || c.comentario || '',
             ws: String(c.link_ws || c.whatsapp || c.telefono || '').replace('wa.me/', '').replace(/[^0-9]/g, ''),
+            shippingPayer: String(c.quien_asume_envio || c.asume_envio || c.shipping_payer || 'empresa').toLowerCase(),
+            shippingCharge: Number(c.monto_envio_cliente || c.shipping_charge || 0) || 0,
             courierId,
             courierName,
             postSale: {
@@ -3742,6 +3796,8 @@
         'SKU': o.inventorySku || '',
         'Cantidad': o.quantity || 1,
         'Valor Recaudo': o.numericAmount,
+        'Quien Asume Envio': o.shippingPayer || 'empresa',
+        'Monto Envio Cliente': Number(o.shippingCharge || 0),
         'Mensajero': o.courierName || 'Sin asignar',
         'Mensajero ID': o.courierId || '',
         'Telefono Mensajero': getCourier(o.courierId)?.phone || '',
@@ -3881,7 +3937,8 @@
       const msg = "Para usar la IA avanzada en tu computadora local, necesitas tu API Key de Google AI Studio.\n\n(Asegúrate de que la clave empiece con 'AIza...')\n\nPégala aquí:";
       const newKey = prompt(msg, currentKey);
       if (newKey !== null) GeminiAPI.setLocalKey(newKey.trim());
-    }
+    },
+    
   };
 
   const reports = {
@@ -3897,6 +3954,7 @@
         if (dateTo && targetDate > dateTo) return false;
         if (!matchesCourierFilter(o, courierFilter)) return false;
         if (repType === 'postsale') return isPostSaleOrder(o);
+        if (repType === 'sales') return !isPostSaleOrder(o);
         return norm(o.status).includes('entregado');
       });
       if (!filtered.length) {
@@ -3919,7 +3977,7 @@
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolución</th></tr>';
         document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolución')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolución', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
-      } else {
+      } else if (repType === 'courier') {
         currentReportName = `Reporte_Mensajero_${safeFileToken(courierLabel)}`;
         let totalRecaudo = 0;
         let totalMensajero = 0;
@@ -3937,19 +3995,63 @@
           <div class="stat-card courier"><div class="stat-icon"><i data-lucide="truck"></i></div><div class="stat-info"><h3>Pago al Mensajero</h3><p>${fmt(totalMensajero)}</p></div></div>
           <div class="stat-card net"><div class="stat-icon"><i data-lucide="trending-up"></i></div><div class="stat-info"><h3>Ganancia Neta</h3><p>${fmt(totalRecaudo - totalMensajero)}</p></div></div>`;
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaEntrega: o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Ciudad: o.city, VentaBruta: o.numericAmount, CostoMensajero: o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate), GananciaNeta: o.numericAmount - (o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate)) }));
+      } else {
+        currentReportName = `Reporte_Ventas_Generales_${safeFileToken(courierLabel)}`;
+        const deliveredCount = filtered.filter((o) => norm(o.status).includes('entregado')).length;
+        const pendingCount = filtered.filter((o) => norm(o.status).includes('pendiente') || norm(o.status).includes('proceso')).length;
+        const canceledCount = filtered.filter((o) => norm(o.status).includes('cancelado')).length;
+        const grossSales = filtered.filter((o) => !norm(o.status).includes('cancelado')).reduce((sum, o) => sum + Number(o.numericAmount || 0), 0);
+        const collectedSales = filtered.filter((o) => norm(o.status).includes('entregado')).reduce((sum, o) => sum + Number(o.numericAmount || 0), 0);
+        const pendingCollection = Math.max(0, grossSales - collectedSales);
+        document.getElementById('report-title').innerText = `Reporte de Ventas Generales - ${courierLabel} (${filtered.length} pedidos)`;
+        document.getElementById('report-summary').innerHTML = `
+          <div class="stat-card money"><div class="stat-icon"><i data-lucide="shopping-bag"></i></div><div class="stat-info"><h3>Ventas Brutas</h3><p>${fmt(grossSales)}</p></div></div>
+          <div class="stat-card courier"><div class="stat-icon"><i data-lucide="check-circle"></i></div><div class="stat-info"><h3>Cobrado</h3><p>${fmt(collectedSales)}</p></div></div>
+          <div class="stat-card net"><div class="stat-icon"><i data-lucide="clock-3"></i></div><div class="stat-info"><h3>Pendiente de Cobro</h3><p>${fmt(pendingCollection)}</p></div></div>
+          <div class="stat-card" style="border-color:#E5E7EB; background:#F9FAFB;">
+            <div class="stat-icon" style="background:#E5E7EB; color:#374151;"><i data-lucide="list-checks"></i></div>
+            <div class="stat-info" style="width:100%;">
+              <h3 style="margin-bottom:6px;">Estados del Período</h3>
+              <table style="width:100%; border-collapse:collapse; font-size:0.75rem; line-height:1.2;">
+                <tr><td style="padding:2px 0; color:#6B7280;">Entregados</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#065F46;">${deliveredCount}</td></tr>
+                <tr><td style="padding:2px 0; color:#6B7280;">Pendientes</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#92400E;">${pendingCount}</td></tr>
+                <tr><td style="padding:2px 0; color:#6B7280;">Cancelados</td><td style="padding:2px 0; text-align:right; font-weight:700; color:#991B1B;">${canceledCount}</td></tr>
+              </table>
+            </div>
+          </div>`;
+        document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Estado</th><th>Recaudo</th></tr>';
+        let totalRecaudoSales = 0;
+        const salesRows = filtered.map((o) => {
+          const isCanceled = norm(o.status).includes('cancelado');
+          if (!isCanceled) totalRecaudoSales += Number(o.numericAmount || 0);
+          return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td>${escapeHtml(o.status)}</td><td style="font-weight:700; color:${isCanceled ? '#9CA3AF' : '#065F46'};">${isCanceled ? `${fmt(o.numericAmount)} (No suma)` : fmt(o.numericAmount)}</td></tr>`;
+        }).join('');
+        const salesTotals = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="6" style="font-weight:800; color:#0F172A;">TOTAL RECAUDO (sin cancelados)</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoSales)}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${salesRows}${salesTotals}`;
+        currentReportData = filtered.map((o) => ({ Pedido: o.id, Fecha: o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Ciudad: o.city, Estado: o.status, Recaudo: o.numericAmount }));
       }
       if (repType === 'postsale') {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Caso</th><th>Mensajero</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Ruta</th><th>Resolucion</th></tr>';
-        document.getElementById('report-tbody').innerHTML = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolucion')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        const postSaleRows = filtered.map((o) => `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.postSale.updatedAt || o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.postSale.type === 'change' ? 'Cambio' : 'Devolucion')}</td><td>${escapeHtml(o.postSale.status || '')}</td><td>${escapeHtml(o.postSale.routeAction || '')}</td><td>${escapeHtml(o.postSale.resolution || '')}</td></tr>`).join('');
+        const postSaleTotalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="7" style="font-weight:800; color:#0F172A;">TOTAL DE CASOS</td><td style="font-weight:800; color:#0F172A;">${filtered.length}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${postSaleRows}${postSaleTotalsRow}`;
         currentReportData = filtered.map((o) => ({ Pedido: o.id, FechaCaso: o.postSale.updatedAt || o.deliveryDate || o.date || '', Mensajero: o.courierName || 'Sin asignar', Cliente: o.name, Tipo: o.postSale.type === 'change' ? 'Cambio' : 'Devolucion', Estado: o.postSale.status || '', Ruta: o.postSale.routeAction || '', Resolucion: o.postSale.resolution || '', PDF: o.postSale.pdfUrl || '', Formulario: o.postSale.formUrl || '' }));
-      } else {
+      } else if (repType === 'courier') {
         document.getElementById('report-thead').innerHTML = '<tr><th>Pedido</th><th>Fecha Entrega</th><th>Mensajero</th><th>Cliente</th><th>Ciudad</th><th>Recaudo</th><th>Costo Envio</th><th>Neto Empresa</th></tr>';
-        document.getElementById('report-tbody').innerHTML = filtered.map((o) => {
+        let totalRecaudoFinal = 0;
+        let totalCostoFinal = 0;
+        let totalNetoFinal = 0;
+        const deliveryRows = filtered.map((o) => {
           const costo = o.aiCalculated ? o.courierCost : calculateCourierCostLocal(o.city, o.address, rate);
           const neto = o.numericAmount - costo;
+          totalRecaudoFinal += o.numericAmount;
+          totalCostoFinal += costo;
+          totalNetoFinal += neto;
           return `<tr><td><strong style="color:var(--primary); font-size:0.85rem;">${escapeHtml(o.id)}</strong></td><td>${escapeHtml(o.deliveryDate || o.date || '')}</td><td>${escapeHtml(o.courierName || 'Sin asignar')}</td><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.city)}</td><td style="font-weight:600; color:#065F46;">${fmt(o.numericAmount)}</td><td style="font-weight:600; color:#4C1D95;">${fmt(costo)}</td><td style="font-weight:700; color:#1E40AF;">${fmt(neto)}</td></tr>`;
         }).join('');
-      }
+        const totalsRow = `<tr style="background:#F8FAFC; border-top:2px solid #CBD5E1;"><td colspan="5" style="font-weight:800; color:#0F172A;">TOTALES</td><td style="font-weight:800; color:#065F46;">${fmt(totalRecaudoFinal)}</td><td style="font-weight:800; color:#4C1D95;">${fmt(totalCostoFinal)}</td><td style="font-weight:800; color:#1E40AF;">${fmt(totalNetoFinal)}</td></tr>`;
+        document.getElementById('report-tbody').innerHTML = `${deliveryRows}${totalsRow}`;
+      } 
       if (window.lucide) window.lucide.createIcons();
     },
     exportReportExcel() {
@@ -3980,3 +4082,4 @@
 </body>
 
 </html>
+
