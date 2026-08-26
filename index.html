@@ -555,6 +555,11 @@
                 <div id="dynamic-editors-container" class="space-y-4">
                     <!-- Inyectado dinámicamente vía JS -->
                 </div>
+                
+                <button onclick="addNewSection()" class="w-full mt-4 bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold py-2 px-3 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md border border-emerald-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Añadir Nuevo Tema
+                </button>
             </div>
 
             <div class="p-3 bg-slate-950 border-t border-slate-800 text-[10px] text-slate-500 text-center">
@@ -938,45 +943,12 @@
                 }
             }
 
-            if (!Array.isArray(reportData.secciones)) reportData.secciones = [];
-
-            const defaultIds = [
-                "sec_introduccion", "sec_proposito", "sec_alcance", "sec_metodologia",
-                "sec_desarrollo", "sec_hallazgos", "sec_analisis", "sec_recomendaciones",
-                "sec_conclusion", "sec_glosario", "sec_anexos"
-            ];
-
-            const normalizedSecciones = [];
-            defaultIds.forEach(id => {
-                let existingSec = reportData.secciones.find(s => s.id === id);
-                if (!existingSec) {
-                    const defSec = defaultReportData.secciones.find(s => s.id === id);
-                    if (defSec) {
-                        existingSec = JSON.parse(JSON.stringify(defSec));
-                    }
-                }
-                if (existingSec) {
-                    if (!existingSec.titulo) {
-                        existingSec.titulo = FIXED_TITLES[id];
-                    }
-                    normalizedSecciones.push(existingSec);
-                }
-            });
-
-            let hasFaltantes = reportData.secciones.some(s => s.id === "sec_faltantes");
-            if (hasFaltantes) {
-                let existingFaltantes = reportData.secciones.find(s => s.id === "sec_faltantes");
-                if (!existingFaltantes) {
-                    existingFaltantes = JSON.parse(JSON.stringify(defaultReportData.extraSec_faltantes));
-                }
-                if (!existingFaltantes.titulo) {
-                    existingFaltantes.titulo = FIXED_TITLES["sec_faltantes"];
-                }
-                normalizedSecciones.push(existingFaltantes);
+            // Si el arreglo está vacío o no existe, lo iniciamos con el esqueleto por defecto
+            if (!Array.isArray(reportData.secciones) || reportData.secciones.length === 0) {
+                reportData.secciones = JSON.parse(JSON.stringify(defaultReportData.secciones));
             }
 
-            reportData.secciones = normalizedSecciones;
-
+            // Normalización dinámica: Ya no forzamos los IDs fijos, permitimos agregar o eliminar libremente.
             reportData.secciones.forEach(sec => {
                 if (!Array.isArray(sec.subtemas)) sec.subtemas = [];
                 sec.subtemas.forEach(sub => {
@@ -1001,17 +973,21 @@
             button.classList.toggle('border-conape-navy', active);
         }
 
-        // Novedad: Extrae el contenido directamente del DOM después de usar execCommand para garantizar el guardado.
+        // Novedad: Extrae el contenido directamente del DOM después de usar execCommand para garantizar el guardado bidireccional.
         function syncActiveEditor() {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
             let node = selection.getRangeAt(0).commonAncestorContainer;
             let editor = node.nodeType === 3 ? node.parentNode.closest('[contenteditable="true"]') : (node.closest ? node.closest('[contenteditable="true"]') : null);
             
-            if (editor && editor.id && editor.id.startsWith('editor-')) {
+            if (editor && editor.id) {
                 const parts = editor.id.split('-');
-                if (parts.length >= 3) {
+                if (editor.id.startsWith('editor-') && parts.length >= 3) {
                     syncFromEditor(parts[1], parts[2], editor.innerHTML);
+                } else if (editor.id.startsWith('preview-') && parts.length >= 3) {
+                    syncFromPreview(parts[1], parts[2], editor.innerHTML);
+                } else {
+                    saveToLocalStorage();
                 }
             } else {
                 saveToLocalStorage();
@@ -1398,6 +1374,42 @@
             saveToLocalStorage();
         }
 
+        function addNewSection() {
+            const nextIndex = reportData.secciones.length + 1;
+            const newSec = {
+                id: `sec_nueva_${Date.now()}`,
+                titulo: `${nextIndex}. Nuevo Tema`,
+                pagina: "3",
+                pageBreakBefore: true,
+                subtemas: [
+                    {
+                        id: `sub_nueva_1_${Date.now()}`,
+                        subtitulo: "Subtítulo Inicial",
+                        contenido: "<p>Escribe el contenido del nuevo tema aquí.</p>",
+                        pageBreakBefore: false
+                    }
+                ]
+            };
+            reportData.secciones.push(newSec);
+            saveToLocalStorage();
+            renderSidebarAndPages();
+        }
+
+        function deleteSection(secId) {
+            if (confirm("¿Estás seguro de que deseas eliminar este tema completo con todos sus subtemas?")) {
+                reportData.secciones = reportData.secciones.filter(s => s.id !== secId);
+                
+                // Renumerar títulos automáticamente para mantener la secuencia (Ej. 1, 2, 3...)
+                reportData.secciones.forEach((sec, idx) => {
+                    const cleanTitle = sec.titulo.replace(/^\d+\.\s*/, '');
+                    sec.titulo = `${idx + 1}. ${cleanTitle}`;
+                });
+                
+                saveToLocalStorage();
+                renderSidebarAndPages();
+            }
+        }
+
         function addSubtemaToSection(secId) {
             const sec = reportData.secciones.find(s => s.id === secId);
             if (!sec) return;
@@ -1569,13 +1581,18 @@
 
                     details.innerHTML = `
                         <summary class="flex justify-between items-center p-3 text-xs font-bold text-slate-200 uppercase tracking-wider cursor-pointer bg-slate-900 hover:bg-slate-800 transition-colors duration-150">
-                            <div class="flex items-center flex-1 gap-2">
-                                <div class="handle-seccion cursor-move text-slate-500 hover:text-slate-300 p-1 rounded" onclick="event.preventDefault(); event.stopPropagation();" title="Arrastrar para mover">
+                            <div class="flex items-center flex-1 gap-2 overflow-hidden">
+                                <div class="handle-seccion cursor-move text-slate-500 hover:text-slate-300 p-1 rounded shrink-0" onclick="event.preventDefault(); event.stopPropagation();" title="Arrastrar para mover">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg>
                                 </div>
-                                <span id="summary-title-${sec.id}">${sec.titulo}</span>
+                                <span id="summary-title-${sec.id}" class="truncate pr-2">${sec.titulo}</span>
                             </div>
-                            <svg class="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button onclick="event.preventDefault(); event.stopPropagation(); deleteSection('${sec.id}')" class="text-red-500 hover:text-red-400 hover:bg-slate-950 p-1 rounded border border-transparent hover:border-red-900 transition-colors" title="Eliminar Tema Completo">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                                <svg class="w-4 h-4 transition-transform group-open:rotate-180 ml-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
                         </summary>
                         <div class="p-3 bg-slate-950 border-t border-slate-800 space-y-3">
                             <div>
